@@ -37,9 +37,20 @@ class XPS_Controller(NewportControllerInterface):
                 self.sock = None
 
     def get_stage_list(self) -> List[str]:
-        # O XPS C8 usa nomes de grupos/positioners configurados internamente.
-        # Por simplicidade, usamos nomes padrão que podem ser mapeados,
-        # ex: "Group1.Pos", "Group2.Pos", etc. Na prática, você define isso no XPS.
+        # Tenta obter a lista de objetos (grupos/posicionadores) dinamicamente do XPS C8
+        ret = self.send_command("ObjectsListGet()", expect_response=True)
+        
+        if ret:
+            # Geralmente a resposta vem no formato: "0, Group1, Group2, Group1.Pos"
+            parts = ret.split(',')
+            if len(parts) > 1 and parts[0] == "0":
+                # Extrai apenas os nomes válidos, ignorando o código de erro inicial '0'
+                objects = [obj.strip() for obj in parts[1:] if obj.strip()]
+                if objects:
+                    return objects
+        
+        # Fallback de segurança se o controlador não responder corretamente
+        logger.warning("Não foi possível ler a lista de eixos dinamicamente. Retornando lista padrão.")
         return ["Group1", "Group2", "Group3"]
 
     def send_command(self, cmd: str, expect_response: bool = False) -> str:

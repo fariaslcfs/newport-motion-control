@@ -37,8 +37,19 @@ class ESP302_Controller(NewportControllerInterface):
                 self.sock = None
 
     def get_stage_list(self) -> List[str]:
-        # Em implementações reais, você pode consultar o controlador,
-        # mas mantemos o padrão de 3 eixos assumidos para o ESP.
+        # Consulta dinamicamente os eixos de 1 a 3 (máximo comum do ESP302)
+        active_stages = []
+        for i in range(1, 4):
+            stage = str(i)
+            # O comando ID? retorna a identificação do estágio conectado.
+            ret = self.send_command(f"{stage}ID?")
+            if ret and not ret.upper().startswith("ERROR"):
+                active_stages.append(stage)
+        
+        if active_stages:
+            return active_stages
+            
+        logger.warning("Nenhum eixo detectado dinamicamente no ESP302. Retornando padrão.")
         return ["1", "2", "3"]
 
     def send_command(self, cmd: str) -> str:

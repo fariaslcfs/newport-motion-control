@@ -193,8 +193,12 @@ class MainWindow(QMainWindow):
             self.custom_cmd_group.setEnabled(True)
             
             # Popular eixos
+            stages = self.controller.get_stage_list()
             self.cb_axis.clear()
-            self.cb_axis.addItems(self.controller.get_stage_list())
+            self.cb_axis.addItems(stages)
+            
+            # Avisa o usuário sobre quais módulos foram detectados
+            QMessageBox.information(self, "Conexão Bem-Sucedida", f"Controlador conectado!\nEixos detectados: {', '.join(stages)}")
             
             self.timer.start()
         else:
