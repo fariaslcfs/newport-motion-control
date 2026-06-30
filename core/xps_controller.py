@@ -1,98 +1,98 @@
-import socket
 import logging
 from typing import List
 from .base import NewportControllerInterface
+
+try:
+    from newportxps import NewportXPS
+except ImportError:
+    NewportXPS = None
 
 logger = logging.getLogger(__name__)
 
 class XPS_Controller(NewportControllerInterface):
     """
     Controlador para XPS C8 via Ethernet (TCP/IP).
-    O XPS geralmente possui uma API baseada em métodos complexos (via biblioteca TCL/C/Python).
-    Esta é uma implementação básica Socket para enviar os comandos ASCII nativos.
+    Utiliza a biblioteca 'newportxps' para lidar com login, FTP (para leitura
+    dinâmica do objects.sys) e máquina de estados.
     """
     def __init__(self):
-        self.sock = None
-        self.port = 5001
+        self.xps = None
 
     def connect(self, connection_string: str) -> bool:
-        # connection_string é o IP
+        if NewportXPS is None:
+            logger.error("A biblioteca 'newportxps' não está instalada. Execute 'pip install newportxps'")
+            return False
+            
         try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.settimeout(1.0)
-            self.sock.connect((connection_string, self.port))
+            # O connection_string é o IP, ex: '192.168.254.254'
+            self.xps = NewportXPS(connection_string, username='Administrator', password='Administrator')
             return True
         except Exception as e:
-            logger.error(f"Erro ao conectar no XPS C8 em {connection_string}:{self.port} - {e}")
-            self.sock = None
+            logger.error(f"Erro ao conectar no XPS C8 em {connection_string} - {e}")
+            self.xps = None
             return False
 
     def disconnect(self) -> None:
-        if self.sock:
+        if self.xps:
             try:
-                self.sock.close()
+                # Safe disconnect baseado na correção apontada no seu script
+                if hasattr(self.xps, 'ftpconn') and self.xps.ftpconn is not None:
+                    try:
+                        self.xps.ftpconn.close()
+                    except Exception:
+                        pass
+                if hasattr(self.xps, '_xps') and self.xps._xps is not None:
+                    try:
+                        if hasattr(self.xps, '_sid') and self.xps._sid is not None:
+                            self.xps._xps.TCP_CloseSocket(self.xps._sid)
+                    except Exception:
+                        pass
             except Exception as e:
                 logger.error(f"Erro ao desconectar XPS C8: {e}")
             finally:
-                self.sock = None
+                self.xps = None
 
     def get_stage_list(self) -> List[str]:
-        # Tenta obter a lista de objetos (grupos/posicionadores) dinamicamente do XPS C8
-        ret = self.send_command("ObjectsListGet()", expect_response=True)
+        # Como o newportxps faz o download do system.ini/objects.sys via FTP no connect(), 
+        # a propriedade self.xps.stages é populada 100% dinamicamente!
+        if self.xps and hasattr(self.xps, 'stages') and self.xps.stages:
+            return list(self.xps.stages.keys())
         
-        if ret:
-            # Geralmente a resposta vem no formato: "0, Group1, Group2, Group1.Pos"
-            parts = ret.split(',')
-            if len(parts) > 1 and parts[0] == "0":
-                # Extrai apenas os nomes válidos, ignorando o código de erro inicial '0'
-                objects = [obj.strip() for obj in parts[1:] if obj.strip()]
-                if objects:
-                    return objects
-        
-        # Fallback de segurança se o controlador não responder corretamente
-        logger.warning("Não foi possível ler a lista de eixos dinamicamente. Retornando lista padrão.")
-        return ["Group1", "Group2", "Group3"]
+        logger.warning("A biblioteca newportxps não encontrou eixos dinamicamente.")
+        return []
 
     def send_command(self, cmd: str, expect_response: bool = False) -> str:
-        if not self.sock:
+        if not self.xps:
             return ""
-        
         try:
-            # XPS usa formato string terminada sem precisar obrigatoriamente de \r\n,
-            # mas vamos manter o padrão ASCII seguro
-            self.sock.sendall(f"{cmd}\r\n".encode('ascii'))
-            
+            error, response = self.xps._xps.Send(self.xps._sid, cmd)
             if expect_response:
-                response = self.sock.recv(1024).decode('ascii').strip()
-                return response
-            return ""
-        except socket.timeout:
-            logger.debug(f"Timeout ao aguardar resposta do XPS para o comando: {cmd}")
-            return ""
+                return response if response else f"ErrCode: {error}"
+            return f"ErrCode: {error}"
         except Exception as e:
             logger.error(f"Erro de comunicação XPS no comando {cmd}: {e}")
             return ""
 
     def get_current_position(self, stage_id: str) -> float:
-        # O comando real pode variar dependendo se é Grupo ou Positioner.
-        # Ex: GroupPositionCurrentGet(GroupName, double *CurrentPosition) -> retorna "0, position"
-        # Mapeando de forma simplificada:
-        ret = self.send_command(f"GroupPositionCurrentGet({stage_id})", expect_response=True)
+        if not self.xps: 
+            return 0.0
         try:
-            # Em geral, retorna "CódigoDeErro, Posição" -> ex: "0, 10.5"
-            parts = ret.split(',')
-            if len(parts) >= 2:
-                return float(parts[1])
-            return float(ret)
-        except ValueError:
-            logger.debug(f"Falha ao converter posição XPS: '{ret}'")
+            return float(self.xps.get_stage_position(stage_id))
+        except Exception as e:
+            logger.debug(f"Falha ao ler posição do {stage_id}: {e}")
             return 0.0
 
     def move_absolute(self, stage_id: str, position: float) -> None:
-        self.send_command(f"GroupMoveAbsolute({stage_id}, {position})")
+        if self.xps:
+            self.xps.move_stage(stage_id, position)
 
     def stop_motion(self, stage_id: str) -> None:
-        self.send_command(f"GroupMoveAbort({stage_id})")
+        if self.xps:
+            # O comando kill/stop geralmente usa o nome do grupo
+            group = stage_id.split('.')[0] if '.' in stage_id else stage_id
+            self.xps.kill_group(group)
 
     def home_axis(self, stage_id: str) -> None:
-        self.send_command(f"GroupHomeSearch({stage_id})")
+        if self.xps:
+            group = stage_id.split('.')[0] if '.' in stage_id else stage_id
+            self.xps.home_group(group)
