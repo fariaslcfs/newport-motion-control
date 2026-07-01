@@ -4,16 +4,17 @@ Este projeto consiste em uma interface gráfica (GUI) desenvolvida em Python e P
 
 - **ESP300 / ESP301**: Comunicação via Serial (Cabo RS232 / USB Prolific).
 - **ESP302**: Comunicação via Ethernet (TCP/IP) utilizando comandos em formato ASCII padrão.
-- **XPS C8**: Comunicação via Ethernet (TCP/IP) disparando comandos específicos da biblioteca de firmware XPS.
+- **XPS C8**: Comunicação robusta via Ethernet integrando a biblioteca `newportxps`, o que inclui handshake de login, download de configurações via FTP para mapeamento de hardware e suporte nativo à máquina de estados.
 
 ## Funcionalidades
 
 - **Detecção Automática de Porta**: Identificação inteligente de portas COM que utilizem chips conversores Prolific.
-- **Leitura em Tempo Real (Polling)**: O sistema atualiza a posição do eixo selecionado a cada 200ms na interface.
-- **Movimentação Absoluta**: Deslocamento direto informando o ponto de destino.
-- **Busca de Origem (Home)**: Botão de atalho para enviar o eixo selecionado para sua marca de zero de fábrica.
-- **Parada de Emergência (Abort)**: Comando rápido e imediato para interromper a trajetória do controlador.
-- **Envio de Comandos Customizados**: Permite o envio de comandos arbitrários e sintaxes complexas (para debugar a placa ou usar funções não mapeadas na interface gráfica) e a leitura direta das respostas.
+- **Descoberta Dinâmica de Eixos**: Mapeamento autônomo dos motores disponíveis no momento da conexão (seja por sondagem via portas no ESP302 ou parse do arquivo `system.ini` via FTP no XPS C8), com direito a feedback visual (pop-up).
+- **Leitura em Tempo Real (Polling)**: Atualização assíncrona (200ms) da posição atual e do status da máquina (ready, disabled, homing, etc.) na interface.
+- **Gestão de Ciclo de Vida do Motor**: Botões visuais de `Inicializar`, `Ativar (Enable)`, `Desativar (Disable)` que travam ou habilitam a movimentação dinamicamente com base no status lido do equipamento.
+- **Assistente Interativo de Comandos (Exclusivo XPS)**: Menu inteligente oculto no painel "Comando Customizado" que é revelado apenas para o XPS C8. Ele varre a biblioteca oficial do equipamento por reflexão em tempo de execução e oferece mais de 230 comandos nativos em forma de *templates* de autocompletar.
+- **Movimentação Absoluta e Origem**: Movimento limpo indicando destino final e atalho de 'Home Search' unificado.
+- **Emergência e Reset**: Interrupção de movimento e comando 'Kill' para destravar eixos em falha.
 
 ## Pré-requisitos
 
