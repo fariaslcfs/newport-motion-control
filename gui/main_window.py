@@ -12,7 +12,14 @@ from core.base import NewportControllerInterface
 logger = logging.getLogger(__name__)
 
 class MainWindow(QMainWindow):
+    """
+    Janela principal da aplicação Newport Motion Control.
+    Gerencia conexões, eixos, ciclos de vida de movimento e envio de comandos.
+    """
     def __init__(self):
+        """
+        Inicializa a janela principal, configura a UI e o timer periódico.
+        """
         super().__init__()
         self.setWindowTitle("Newport Motion Control")
         self.resize(500, 400)
@@ -28,6 +35,9 @@ class MainWindow(QMainWindow):
         self.timer.setInterval(200) # 200ms
         
     def init_ui(self):
+        """
+        Monta a estrutura de widgets da interface gráfica.
+        """
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
@@ -81,6 +91,32 @@ class MainWindow(QMainWindow):
         self.cb_axis = QComboBox()
         axis_layout.addWidget(self.cb_axis)
         move_layout.addLayout(axis_layout)
+        
+        # Estado do Eixo
+        status_layout = QHBoxLayout()
+        status_layout.addWidget(QLabel("Estado do Eixo:"))
+        self.lbl_axis_status = QLabel("Desconectado")
+        self.lbl_axis_status.setStyleSheet("font-weight: bold; color: blue;")
+        status_layout.addWidget(self.lbl_axis_status)
+        status_layout.addStretch()
+        move_layout.addLayout(status_layout)
+        
+        # Botões de Ciclo de Vida do Eixo
+        lifecycle_layout = QHBoxLayout()
+        self.btn_initialize = QPushButton("Inicializar")
+        self.btn_initialize.clicked.connect(self.initialize_axis)
+        self.btn_enable = QPushButton("Ativar (Enable)")
+        self.btn_enable.clicked.connect(self.enable_axis)
+        self.btn_disable = QPushButton("Desativar (Disable)")
+        self.btn_disable.clicked.connect(self.disable_axis)
+        self.btn_kill = QPushButton("Reset/Kill")
+        self.btn_kill.clicked.connect(self.kill_axis)
+        
+        lifecycle_layout.addWidget(self.btn_initialize)
+        lifecycle_layout.addWidget(self.btn_enable)
+        lifecycle_layout.addWidget(self.btn_disable)
+        lifecycle_layout.addWidget(self.btn_kill)
+        move_layout.addLayout(lifecycle_layout)
         
         # Posição Absoluta
         abs_layout = QHBoxLayout()
@@ -149,6 +185,9 @@ class MainWindow(QMainWindow):
         main_layout.addStretch()
 
     def auto_detect_port(self):
+        """
+        Auto-detecta portas seriais que usam conversores Prolific ou preenche o IP padrão.
+        """
         ctrl_type = self.cb_controller_type.currentText()
         if "Serial" in ctrl_type:
             found = False
@@ -166,6 +205,10 @@ class MainWindow(QMainWindow):
             self.le_address.setText("192.168.0.254")
 
     def connect_controller(self):
+        """
+        Instancia o controlador selecionado e estabelece a conexão física/rede.
+        Populariza a lista de eixos ativos e inicia o timer de leitura de posição.
+        """
         ctrl_type = self.cb_controller_type.currentText()
         address = self.le_address.text().strip()
         
@@ -200,11 +243,16 @@ class MainWindow(QMainWindow):
             # Avisa o usuário sobre quais módulos foram detectados
             QMessageBox.information(self, "Conexão Bem-Sucedida", f"Controlador conectado!\nEixos detectados: {', '.join(stages)}")
             
+            # Atualiza posição e status imediatamente
+            self.update_position()
             self.timer.start()
         else:
             QMessageBox.critical(self, "Erro", f"Falha ao conectar no endereço {address}")
 
     def disconnect_controller(self):
+        """
+        Para o timer de atualização e desconecta o controlador de forma limpa.
+        """
         self.timer.stop()
         if self.controller:
             self.controller.disconnect()
@@ -219,8 +267,14 @@ class MainWindow(QMainWindow):
         self.custom_cmd_group.setEnabled(False)
         self.cb_axis.clear()
         self.lbl_position_display.setText("0.000")
+        self.lbl_axis_status.setText("Desconectado")
+        self.lbl_axis_status.setStyleSheet("font-weight: bold; color: blue;")
 
     def update_position(self):
+        """
+        Método de polling periódico executado pelo QTimer.
+        Atualiza no display a posição atual do estágio selecionado e seu status de erro/energia.
+        """
         if not self.controller:
             return
             
@@ -234,7 +288,77 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Erro ao atualizar posição: {e}")
 
+        try:
+            status = self.controller.get_axis_status(axis)
+            self.lbl_axis_status.setText(status)
+            self.update_ui_states(status)
+        except Exception as e:
+            logger.error(f"Erro ao atualizar status: {e}")
+
+    def update_ui_states(self, status: str):
+        """
+        Gerencia o estado dos botões da interface baseando-se no estado atual da máquina do eixo.
+
+        Args:
+            status (str): Estado atual informado pela controladora.
+        """
+        status_lower = status.lower()
+        
+        # Se contiver 'not initialized' ou 'notinit'
+        if "not initialized" in status_lower or "notinit" in status_lower:
+            self.lbl_axis_status.setStyleSheet("font-weight: bold; color: red;")
+            self.btn_initialize.setEnabled(True)
+            self.btn_enable.setEnabled(False)
+            self.btn_disable.setEnabled(False)
+            self.btn_home.setEnabled(False)
+            self.btn_move.setEnabled(False)
+            self.le_position.setEnabled(False)
+            self.btn_kill.setEnabled(True)
+        # Se contiver 'not referenced' ou 'notref' ou 'homing'
+        elif "not referenced" in status_lower or "notref" in status_lower or "homing" in status_lower:
+            self.lbl_axis_status.setStyleSheet("font-weight: bold; color: orange;")
+            self.btn_initialize.setEnabled(False)
+            self.btn_enable.setEnabled(False)
+            self.btn_disable.setEnabled(False)
+            self.btn_home.setEnabled(True)
+            self.btn_move.setEnabled(False)
+            self.le_position.setEnabled(False)
+            self.btn_kill.setEnabled(True)
+        # Se contiver 'disabled' ou 'motor off'
+        elif "disabled" in status_lower or "motor off" in status_lower:
+            self.lbl_axis_status.setStyleSheet("font-weight: bold; color: gray;")
+            self.btn_initialize.setEnabled(False)
+            self.btn_enable.setEnabled(True)
+            self.btn_disable.setEnabled(False)
+            self.btn_home.setEnabled(False)
+            self.btn_move.setEnabled(False)
+            self.le_position.setEnabled(False)
+            self.btn_kill.setEnabled(True)
+        # Se contiver 'ready' ou 'motor on'
+        elif "ready" in status_lower or "motor on" in status_lower:
+            self.lbl_axis_status.setStyleSheet("font-weight: bold; color: green;")
+            self.btn_initialize.setEnabled(False)
+            self.btn_enable.setEnabled(False)
+            self.btn_disable.setEnabled(True)
+            self.btn_home.setEnabled(True)
+            self.btn_move.setEnabled(True)
+            self.le_position.setEnabled(True)
+            self.btn_kill.setEnabled(True)
+        else:
+            # Qualquer outro estado (Emergency stop, etc.)
+            self.lbl_axis_status.setStyleSheet("font-weight: bold; color: darkred;")
+            self.btn_initialize.setEnabled(True)
+            self.btn_enable.setEnabled(False)
+            self.btn_disable.setEnabled(False)
+            self.btn_home.setEnabled(False)
+            self.btn_move.setEnabled(False)
+            self.le_position.setEnabled(False)
+            self.btn_kill.setEnabled(True)
+
     def move_absolute(self):
+        """
+        Dispara a movimentação absoluta para o valor lido na caixa de texto.
+        """
         if not self.controller:
             return
             
@@ -250,6 +374,9 @@ class MainWindow(QMainWindow):
             logger.error(f"Erro ao mover eixo: {e}")
 
     def home_axis(self):
+        """
+        Envia comando para que o eixo procure sua marca de Home/Zero físico.
+        """
         if not self.controller:
             return
             
@@ -261,6 +388,9 @@ class MainWindow(QMainWindow):
             logger.error(f"Erro ao buscar origem do eixo: {e}")
 
     def stop_motion(self):
+        """
+        Dispara comando de abortar movimento e travar o motor.
+        """
         if not self.controller:
             return
         
@@ -270,7 +400,70 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Erro ao parar eixo: {e}")
 
+    def initialize_axis(self):
+        """
+        Interface com o comando de inicialização de eixo do controlador.
+        """
+        if not self.controller:
+            return
+        axis = self.cb_axis.currentText()
+        if not axis:
+            return
+        try:
+            self.controller.initialize_axis(axis)
+            QMessageBox.information(self, "Inicializar", f"Inicialização do eixo {axis} executada com sucesso.")
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Erro ao inicializar eixo {axis}: {e}")
+
+    def enable_axis(self):
+        """
+        Envia o comando de ativação de potência (Enable) do motor para o eixo selecionado.
+        """
+        if not self.controller:
+            return
+        axis = self.cb_axis.currentText()
+        if not axis:
+            return
+        try:
+            self.controller.enable_axis(axis)
+            QMessageBox.information(self, "Habilitar", f"Eixo {axis} habilitado (Motor ON).")
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Erro ao habilitar eixo {axis}: {e}")
+
+    def disable_axis(self):
+        """
+        Envia o comando de desativação de potência (Disable) do motor para o eixo selecionado.
+        """
+        if not self.controller:
+            return
+        axis = self.cb_axis.currentText()
+        if not axis:
+            return
+        try:
+            self.controller.disable_axis(axis)
+            QMessageBox.information(self, "Desabilitar", f"Eixo {axis} desabilitado (Motor OFF).")
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Erro ao desabilitar eixo {axis}: {e}")
+
+    def kill_axis(self):
+        """
+        Envia o comando Kill/Reset do grupo ou estágio para parar e limpar eventuais erros de status.
+        """
+        if not self.controller:
+            return
+        axis = self.cb_axis.currentText()
+        if not axis:
+            return
+        try:
+            self.controller.kill_axis(axis)
+            QMessageBox.warning(self, "Kill/Reset", f"Comando Kill/Reset enviado para o eixo {axis}.")
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Erro ao enviar Kill/Reset para {axis}: {e}")
+
     def send_custom_command(self):
+        """
+        Envia comando arbitrário inserido no terminal da GUI e escreve a resposta obtida.
+        """
         if not self.controller:
             return
             
@@ -297,5 +490,8 @@ class MainWindow(QMainWindow):
             self.le_cmd_response.setText(f"Erro: {e}")
 
     def closeEvent(self, event):
+        """
+        Executado ao fechar a janela da aplicação, garantindo desconexão segura.
+        """
         self.disconnect_controller()
         event.accept()

@@ -18,10 +18,10 @@ Este projeto consiste em uma interface gráfica (GUI) desenvolvida em Python e P
 ## Pré-requisitos
 
 Certifique-se de ter o Python 3 instalado no sistema.
-É necessário instalar as seguintes bibliotecas:
+Instale todas as dependências necessárias executando o comando a seguir:
 
 ```bash
-pip install PyQt6 pyserial
+pip install -r requirements.txt
 ```
 
 ## Como Usar
@@ -38,6 +38,30 @@ python main.py
    - Insira o Endereço (ex: `COM3` para serial ou `192.168.0.254` para rede). Se utilizar cabos USB-Serial da Prolific, você pode utilizar o botão "Auto Detectar".
    - Clique em **Conectar**.
    - Utilize a área "Controle de Eixo" para se mover ou a área "Comando Customizado" para sintaxes de terminal.
+
+## Geração do Executável (PyInstaller)
+
+Para empacotar a aplicação em um arquivo executável autônomo (que não necessita do Python instalado na máquina de destino), você pode utilizar o **PyInstaller**. 
+
+> [!NOTE]
+> O PyInstaller gera binários nativos do sistema onde o comando é executado. Para gerar o executável de Windows (.exe), você deve rodar o comando no Windows; para Linux, no Ubuntu/Mint.
+
+### 1. No Windows 10/11
+Abra o PowerShell ou Prompt de Comando na raiz do projeto e execute:
+
+```powershell
+pyinstaller --noconfirm --onefile --windowed --name="NewportMotionControl" main.py
+```
+* O executável final será gerado na pasta `dist/NewportMotionControl.exe`.
+
+### 2. No Linux (Ubuntu/Mint)
+Instale o PyInstaller no seu ambiente, abra o terminal na raiz do projeto e execute:
+
+```bash
+pyinstaller --noconfirm --onefile --windowed --name="NewportMotionControl" main.py
+```
+* O binário executável final será gerado em `dist/NewportMotionControl`.
+* Se necessário, certifique-se de dar permissões de execução com `chmod +x dist/NewportMotionControl` antes de executá-lo.
 
 ## Estrutura do Projeto
 

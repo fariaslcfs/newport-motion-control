@@ -19,6 +19,17 @@ class XPS_Controller(NewportControllerInterface):
         self.xps = None
 
     def connect(self, connection_string: str) -> bool:
+        """
+        Conecta ao controlador XPS C8 via Ethernet (TCP/IP).
+
+        Inicializa a biblioteca 'newportxps' que carrega configurações do hardware.
+
+        Args:
+            connection_string (str): Endereço IP do controlador XPS (ex: '192.168.0.254').
+
+        Returns:
+            bool: True se conectado e logado com sucesso, False caso contrário.
+        """
         if NewportXPS is None:
             logger.error("A biblioteca 'newportxps' não está instalada. Execute 'pip install newportxps'")
             return False
@@ -33,6 +44,9 @@ class XPS_Controller(NewportControllerInterface):
             return False
 
     def disconnect(self) -> None:
+        """
+        Fecha as conexões de soquetes e FTP do controlador XPS C8 com segurança.
+        """
         if self.xps:
             try:
                 # Safe disconnect baseado na correção apontada no seu script
@@ -53,6 +67,12 @@ class XPS_Controller(NewportControllerInterface):
                 self.xps = None
 
     def get_stage_list(self) -> List[str]:
+        """
+        Retorna a lista de eixos/estágios disponíveis detectados dinamicamente via FTP.
+
+        Returns:
+            List[str]: Nomes dos eixos no formato 'Grupo.Eixo' (ex: ['Group1.Pos']).
+        """
         # Como o newportxps faz o download do system.ini/objects.sys via FTP no connect(), 
         # a propriedade self.xps.stages é populada 100% dinamicamente!
         if self.xps and hasattr(self.xps, 'stages') and self.xps.stages:
@@ -62,6 +82,16 @@ class XPS_Controller(NewportControllerInterface):
         return []
 
     def send_command(self, cmd: str, expect_response: bool = False) -> str:
+        """
+        Envia um comando customizado bruto para o socket de baixo nível do XPS.
+
+        Args:
+            cmd (str): O comando bruto.
+            expect_response (bool): Se deve retornar a string de resposta ou código de erro.
+
+        Returns:
+            str: Resposta do XPS ou string com código de erro.
+        """
         if not self.xps:
             return ""
         try:
@@ -74,6 +104,15 @@ class XPS_Controller(NewportControllerInterface):
             return ""
 
     def get_current_position(self, stage_id: str) -> float:
+        """
+        Obtém a posição atual do estágio consultando a biblioteca 'newportxps'.
+
+        Args:
+            stage_id (str): Identificador do estágio ('Grupo.Eixo').
+
+        Returns:
+            float: Posição física ou 0.0 em caso de falha.
+        """
         if not self.xps: 
             return 0.0
         try:
@@ -83,16 +122,115 @@ class XPS_Controller(NewportControllerInterface):
             return 0.0
 
     def move_absolute(self, stage_id: str, position: float) -> None:
+        """
+        Executa um movimento absoluto para o estágio especificado.
+
+        Args:
+            stage_id (str): Identificador do estágio ('Grupo.Eixo').
+            position (float): Coordenada absoluta de destino.
+        """
         if self.xps:
             self.xps.move_stage(stage_id, position)
 
     def stop_motion(self, stage_id: str) -> None:
+        """
+        Interrompe imediatamente o movimento chamando 'kill_group' para o grupo do estágio.
+
+        Args:
+            stage_id (str): Identificador do estágio ('Grupo.Eixo').
+        """
         if self.xps:
             # O comando kill/stop geralmente usa o nome do grupo
             group = stage_id.split('.')[0] if '.' in stage_id else stage_id
             self.xps.kill_group(group)
 
     def home_axis(self, stage_id: str) -> None:
+        """
+        Inicia a busca de origem (homing) para o grupo correspondente ao estágio.
+
+        Args:
+            stage_id (str): Identificador do estágio.
+        """
         if self.xps:
             group = stage_id.split('.')[0] if '.' in stage_id else stage_id
             self.xps.home_group(group)
+
+    def get_axis_status(self, stage_id: str) -> str:
+        """
+        Lê o estado da máquina de estados do grupo a que pertence o estágio.
+
+        Args:
+            stage_id (str): Identificador do estágio.
+
+        Returns:
+            str: Nome do estado retornado (ex: 'Ready state', 'Not initialized state').
+        """
+        if not self.xps:
+            return "Disconnected"
+        try:
+            group = stage_id.split('.')[0] if '.' in stage_id else stage_id
+            statuses = self.xps.get_group_status()
+            return statuses.get(group, "Unknown")
+        except Exception as e:
+            logger.debug(f"Falha ao ler status do grupo {stage_id}: {e}")
+            return "Unknown"
+
+    def initialize_axis(self, stage_id: str) -> None:
+        """
+        Inicializa o grupo de movimento associado ao estágio.
+
+        Args:
+            stage_id (str): Identificador do estágio.
+        """
+        if self.xps:
+            group = stage_id.split('.')[0] if '.' in stage_id else stage_id
+            try:
+                self.xps.initialize_group(group)
+            except Exception as e:
+                logger.error(f"Erro ao inicializar grupo {group}: {e}")
+                raise
+
+    def enable_axis(self, stage_id: str) -> None:
+        """
+        Habilita a potência do motor (Motion Enable) para o grupo associado ao estágio.
+
+        Args:
+            stage_id (str): Identificador do estágio.
+        """
+        if self.xps:
+            group = stage_id.split('.')[0] if '.' in stage_id else stage_id
+            try:
+                self.xps.enable_group(group)
+            except Exception as e:
+                logger.error(f"Erro ao habilitar grupo {group}: {e}")
+                raise
+
+    def disable_axis(self, stage_id: str) -> None:
+        """
+        Desabilita a potência do motor (Motion Disable) para o grupo associado ao estágio.
+
+        Args:
+            stage_id (str): Identificador do estágio.
+        """
+        if self.xps:
+            group = stage_id.split('.')[0] if '.' in stage_id else stage_id
+            try:
+                self.xps.disable_group(group)
+            except Exception as e:
+                logger.error(f"Erro ao desabilitar grupo {group}: {e}")
+                raise
+
+    def kill_axis(self, stage_id: str) -> None:
+        """
+        Chama 'kill_group' no grupo associado ao estágio para parar movimentos e limpar erros.
+
+        Args:
+            stage_id (str): Identificador do estágio.
+        """
+        if self.xps:
+            group = stage_id.split('.')[0] if '.' in stage_id else stage_id
+            try:
+                self.xps.kill_group(group)
+            except Exception as e:
+                logger.error(f"Erro ao matar/parar grupo {group}: {e}")
+                raise

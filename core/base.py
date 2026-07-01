@@ -58,3 +58,28 @@ class NewportControllerInterface(abc.ABC):
     def send_command(self, cmd: str) -> str:
         """Envia um comando customizado para a controladora e retorna a resposta (se houver)."""
         pass
+
+    @abc.abstractmethod
+    def get_axis_status(self, stage_id: str) -> str:
+        """Retorna o estado atual do eixo/grupo (ex: 'Ready', 'Not initialized', 'Disabled')."""
+        pass
+
+    @abc.abstractmethod
+    def initialize_axis(self, stage_id: str) -> None:
+        """Inicializa o eixo/grupo (necessário para XPS)."""
+        pass
+
+    @abc.abstractmethod
+    def enable_axis(self, stage_id: str) -> None:
+        """Ativa/Habilita o eixo/grupo."""
+        pass
+
+    @abc.abstractmethod
+    def disable_axis(self, stage_id: str) -> None:
+        """Desativa/Desabilita o eixo/grupo."""
+        pass
+
+    @abc.abstractmethod
+    def kill_axis(self, stage_id: str) -> None:
+        """Interrompe e reinicia/reseta o grupo do eixo para limpar falhas."""
+        pass

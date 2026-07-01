@@ -16,6 +16,15 @@ class ESP302_Controller(NewportControllerInterface):
         self.port = 5001
 
     def connect(self, connection_string: str) -> bool:
+        """
+        Conecta ao controlador ESP302 via Socket Ethernet (TCP/IP).
+
+        Args:
+            connection_string (str): O endereço IP do controlador (ex: '192.168.0.254').
+
+        Returns:
+            bool: True se conectado com sucesso, False caso contrário.
+        """
         # connection_string é o IP, ex: '192.168.0.254'
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -28,6 +37,9 @@ class ESP302_Controller(NewportControllerInterface):
             return False
 
     def disconnect(self) -> None:
+        """
+        Fecha o socket de conexão do ESP302 de forma segura.
+        """
         if self.sock:
             try:
                 self.sock.close()
@@ -37,6 +49,12 @@ class ESP302_Controller(NewportControllerInterface):
                 self.sock = None
 
     def get_stage_list(self) -> List[str]:
+        """
+        Identifica dinamicamente os eixos conectados consultando 'ID?' de 1 a 3.
+
+        Returns:
+            List[str]: Lista contendo identificadores de eixos encontrados (ex: ['1', '2']).
+        """
         # Consulta dinamicamente os eixos de 1 a 3 (máximo comum do ESP302)
         active_stages = []
         for i in range(1, 4):
@@ -53,6 +71,17 @@ class ESP302_Controller(NewportControllerInterface):
         return ["1", "2", "3"]
 
     def send_command(self, cmd: str) -> str:
+        """
+        Envia comando ASCII de baixo nível via socket TCP/IP.
+
+        Se for um comando de consulta (contendo '?'), lê e retorna a resposta.
+
+        Args:
+            cmd (str): O comando Newport (sem CRLF).
+
+        Returns:
+            str: Resposta do controlador ou string vazia.
+        """
         if not self.sock:
             return ""
         
@@ -73,6 +102,15 @@ class ESP302_Controller(NewportControllerInterface):
             return ""
 
     def get_current_position(self, stage_id: str) -> float:
+        """
+        Lê a posição atual do eixo consultando '{stage_id}TP?'.
+
+        Args:
+            stage_id (str): Identificador do eixo (ex: '1').
+
+        Returns:
+            float: Posição do eixo ou 0.0 em caso de falha.
+        """
         ret = self.send_command(f"{stage_id}TP?")
         try:
             return float(ret)
@@ -81,11 +119,86 @@ class ESP302_Controller(NewportControllerInterface):
             return 0.0
 
     def move_absolute(self, stage_id: str, position: float) -> None:
+        """
+        Move o eixo para uma coordenada absoluta usando '{stage_id}PA{coord}'.
+
+        Args:
+            stage_id (str): Identificador do eixo (ex: '1').
+            position (float): Posição de destino absoluta.
+        """
         self.send_command(f"{stage_id}PA{position}")
 
     def stop_motion(self, stage_id: str) -> None:
+        """
+        Para imediatamente o movimento do eixo usando o comando '{stage_id}ST'.
+
+        Args:
+            stage_id (str): Identificador do eixo.
+        """
         self.send_command(f"{stage_id}ST")
 
     def home_axis(self, stage_id: str) -> None:
+        """
+        Comanda o eixo a realizar a busca de origem usando '{stage_id}OR'.
+
+        Args:
+            stage_id (str): Identificador do eixo.
+        """
         # Busca origem (Search for Home)
         self.send_command(f"{stage_id}OR")
+
+    def get_axis_status(self, stage_id: str) -> str:
+        """
+        Consulta se o motor do eixo está ligado enviando '{stage_id}MO?'.
+
+        Args:
+            stage_id (str): Identificador do eixo.
+
+        Returns:
+            str: 'Ready (Motor ON)', 'Disabled (Motor OFF)' ou status bruto.
+        """
+        if not self.sock:
+            return "Disconnected"
+        ret = self.send_command(f"{stage_id}MO?")
+        if ret == "1":
+            return "Ready (Motor ON)"
+        elif ret == "0":
+            return "Disabled (Motor OFF)"
+        else:
+            return f"Unknown ({ret})"
+
+    def initialize_axis(self, stage_id: str) -> None:
+        """
+        No-op para ESP302. Não requer inicialização de grupo por software.
+
+        Args:
+            stage_id (str): Identificador do eixo.
+        """
+        pass
+
+    def enable_axis(self, stage_id: str) -> None:
+        """
+        Liga o motor do eixo correspondente usando '{stage_id}MO'.
+
+        Args:
+            stage_id (str): Identificador do eixo (ex: '1').
+        """
+        self.send_command(f"{stage_id}MO")
+
+    def disable_axis(self, stage_id: str) -> None:
+        """
+        Desliga o motor do eixo correspondente usando '{stage_id}MF'.
+
+        Args:
+            stage_id (str): Identificador do eixo (ex: '1').
+        """
+        self.send_command(f"{stage_id}MF")
+
+    def kill_axis(self, stage_id: str) -> None:
+        """
+        Para o movimento de forma emergencial (no-op de reinicialização para ESP).
+
+        Args:
+            stage_id (str): Identificador do eixo (ex: '1').
+        """
+        self.stop_motion(stage_id)

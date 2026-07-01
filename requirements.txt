@@ -1,0 +1,4 @@
+PyQt6>=6.4.0
+pyserial>=3.5
+newportxps>=0.3.0
+pyinstaller>=5.0.0
