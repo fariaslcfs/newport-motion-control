@@ -153,7 +153,25 @@ class XPS_Controller(NewportControllerInterface):
         """
         if self.xps:
             group = stage_id.split('.')[0] if '.' in stage_id else stage_id
-            self.xps.home_group(group)
+            try:
+                self.xps.home_group(group)
+            except Exception as e:
+                logger.warning(f"GroupHomeSearch falhou para {group} ({e}). Tentando fallback...")
+                if hasattr(self.xps, '_xps'):
+                    try:
+                        self.xps.kill_group(group)
+                        self.xps.initialize_group(group)
+                    except Exception as k_e:
+                        logger.debug(f"Kill/Init fallback error: {k_e}")
+                        
+                    try:
+                        err, _ = self.xps._xps.GroupHomeSearchAndRelativeMove(self.xps._sid, group, 0.0)
+                        if err != 0:
+                            raise RuntimeError(f"Falha no fallback de homing. XPS ErrorCode: {err}")
+                    except Exception as fallback_e:
+                        raise RuntimeError(f"Falha nas duas tentativas de homing. Erro: {fallback_e}")
+                else:
+                    raise
 
     def get_axis_status(self, stage_id: str) -> str:
         """
