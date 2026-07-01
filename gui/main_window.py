@@ -150,6 +150,20 @@ class MainWindow(QMainWindow):
         custom_cmd_group = QGroupBox("Comando Customizado")
         custom_cmd_layout = QVBoxLayout()
         
+        # XPS Commands Assistant
+        xps_assistant_layout = QHBoxLayout()
+        xps_assistant_layout.setContentsMargins(0, 0, 0, 0)
+        xps_assistant_layout.addWidget(QLabel("Assistente XPS:"))
+        self.cb_xps_commands = QComboBox()
+        self.cb_xps_commands.addItem("Selecione um comando XPS...")
+        self.cb_xps_commands.currentIndexChanged.connect(self.on_xps_command_selected)
+        xps_assistant_layout.addWidget(self.cb_xps_commands)
+        
+        self.widget_xps_assistant = QWidget()
+        self.widget_xps_assistant.setLayout(xps_assistant_layout)
+        self.widget_xps_assistant.hide() # começa oculto
+        custom_cmd_layout.addWidget(self.widget_xps_assistant)
+        
         cmd_input_layout = QHBoxLayout()
         cmd_input_layout.addWidget(QLabel("Comando:"))
         self.le_custom_cmd = QLineEdit()
@@ -243,6 +257,13 @@ class MainWindow(QMainWindow):
             # Avisa o usuário sobre quais módulos foram detectados
             QMessageBox.information(self, "Conexão Bem-Sucedida", f"Controlador conectado!\nEixos detectados: {', '.join(stages)}")
             
+            # Show/Hide XPS assistant
+            if ctrl_type == "XPS C8 (Ethernet)":
+                self.populate_xps_commands()
+                self.widget_xps_assistant.show()
+            else:
+                self.widget_xps_assistant.hide()
+            
             # Atualiza posição e status imediatamente
             self.update_position()
             self.timer.start()
@@ -269,6 +290,10 @@ class MainWindow(QMainWindow):
         self.lbl_position_display.setText("0.000")
         self.lbl_axis_status.setText("Desconectado")
         self.lbl_axis_status.setStyleSheet("font-weight: bold; color: blue;")
+        
+        self.widget_xps_assistant.hide()
+        self.cb_xps_commands.clear()
+        self.cb_xps_commands.addItem("Selecione um comando XPS...")
 
     def update_position(self):
         """
@@ -488,6 +513,38 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Erro ao enviar comando customizado: {e}")
             self.le_cmd_response.setText(f"Erro: {e}")
+
+    def populate_xps_commands(self):
+        """
+        Popula a combobox de assistente do XPS extraindo os métodos nativos da lib via inspect.
+        """
+        try:
+            import inspect
+            from newportxps.XPS_C8_drivers import XPS
+            commands = []
+            for name, func in inspect.getmembers(XPS, inspect.isroutine):
+                if name[0].isupper() and not name.startswith("TCP_") and not name.startswith("Login"):
+                    sig = inspect.signature(func)
+                    params = list(sig.parameters.keys())
+                    # Filtra self e socketId (uso interno do driver)
+                    clean_params = [p for p in params if p not in ('self', 'socketId')]
+                    template = f"{name}({', '.join(clean_params)})"
+                    commands.append(template)
+            
+            self.cb_xps_commands.clear()
+            self.cb_xps_commands.addItem("Selecione um comando XPS...")
+            self.cb_xps_commands.addItems(sorted(commands))
+        except Exception as e:
+            logger.warning(f"Não foi possível carregar comandos XPS para o dropdown: {e}")
+
+    def on_xps_command_selected(self, index):
+        """
+        Preenche automaticamente a caixa de texto de comando com o template selecionado.
+        """
+        if index <= 0:
+            return
+        template = self.cb_xps_commands.itemText(index)
+        self.le_custom_cmd.setText(template)
 
     def closeEvent(self, event):
         """
