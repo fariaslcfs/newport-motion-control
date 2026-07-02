@@ -146,29 +146,13 @@ class XPS_Controller(NewportControllerInterface):
 
     def home_axis(self, stage_id: str) -> None:
         """
-        Inicia a busca de origem (homing) para o grupo correspondente ao estágio.
-        Verifica o estado da máquina e executa as pré-condições necessárias (Kill, Init).
+        Executa a busca de origem (Homing) estritamente no grupo do estágio.
+        Presume que as pré-condições (Inicializado, Não Referenciado) já foram
+        satisfeitas pela lógica da interface.
         """
         if self.xps and hasattr(self.xps, '_xps'):
             group = stage_id.split('.')[0] if '.' in stage_id else stage_id
-            
-            # Consultar status numérico
-            err, status_code = self.xps._xps.GroupStatusGet(self.xps._sid, group)
-            if err != 0:
-                raise RuntimeError(f"Não foi possível obter o estado do grupo para Homing (Err: {err})")
                 
-            # Inteligência de Estados
-            # 0 a 9 = Not Initialized
-            if 0 <= status_code <= 9:
-                logger.info(f"Grupo {group} não inicializado. Inicializando primeiro...")
-                self.xps.initialize_group(group)
-            # 20 a 29 = Ready, 42/41 = Disabled. (Precisam voltar para Not Referenced para poderem executar Home)
-            elif (20 <= status_code <= 29) or (status_code in [41, 42]):
-                logger.info(f"Grupo {group} já estava Pronto/Desativado. Aplicando Kill -> Init para forçar re-homing...")
-                self.xps.kill_group(group)
-                self.xps.initialize_group(group)
-                
-            # Agora tenta o homing normal
             try:
                 self.xps.home_group(group)
             except Exception as e:

@@ -396,31 +396,28 @@ class MainWindow(QMainWindow):
         if state == AxisState.UNINITIALIZED:
             self.update_status_pill("NÃO INICIALIZADO", "#e74c3c") # Red
             self.btn_initialize.setEnabled(True)
-            self.btn_home.setEnabled(True) # O XPS Controller agora faz init automático no home
             
         elif state == AxisState.NOT_REFERENCED:
-            self.update_status_pill("REQUER HOMING", "#f39c12") # Orange
+            self.update_status_pill("NÃO REFERENCIADO (REQUER HOME)", "#f39c12") # Orange
             self.btn_home.setEnabled(True)
             
         elif state == AxisState.DISABLED:
             self.update_status_pill("MOTOR DESLIGADO", "#8e44ad") # Purple
             self.btn_enable.setEnabled(True)
-            self.btn_home.setEnabled(True) # O XPS Controller fará Kill -> Init -> Home
             
         elif state == AxisState.READY:
             self.update_status_pill("PRONTO (READY)", "#27ae60") # Green
             self.btn_disable.setEnabled(True)
-            self.btn_home.setEnabled(True)
             self.btn_move.setEnabled(True)
             self.le_position.setEnabled(True)
             
         elif state == AxisState.MOVING:
-            self.update_status_pill("EM MOVIMENTO", "#3498db") # Blue
-            # Nada habilitado além do kill/stop
+            self.update_status_pill("EM MOVIMENTO / TAREFA", "#3498db") # Blue
+            # Apenas Kill/Stop liberado
             
         elif state == AxisState.ERROR:
             self.update_status_pill("FALHA / ERRO", "#c0392b") # Dark Red
-            self.btn_initialize.setEnabled(True)
+            self.btn_kill.setEnabled(True)
             
         else:
             self.update_status_pill("DESCONHECIDO", "#7f8c8d") # Gray
