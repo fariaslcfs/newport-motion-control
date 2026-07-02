@@ -162,8 +162,8 @@ class XPS_Controller(NewportControllerInterface):
             if 0 <= status_code <= 9:
                 logger.info(f"Grupo {group} não inicializado. Inicializando primeiro...")
                 self.xps.initialize_group(group)
-            # 20 a 29 = Ready, 40 a 49 = Disabled. (Precisam voltar para Not Referenced)
-            elif (20 <= status_code <= 29) or (40 <= status_code <= 49):
+            # 20 a 29 = Ready, 42/41 = Disabled. (Precisam voltar para Not Referenced para poderem executar Home)
+            elif (20 <= status_code <= 29) or (status_code in [41, 42]):
                 logger.info(f"Grupo {group} já estava Pronto/Desativado. Aplicando Kill -> Init para forçar re-homing...")
                 self.xps.kill_group(group)
                 self.xps.initialize_group(group)
@@ -201,10 +201,10 @@ class XPS_Controller(NewportControllerInterface):
                 return AxisState.NOT_REFERENCED
             elif 20 <= status_code <= 29:
                 return AxisState.READY
-            elif 40 <= status_code <= 49:
+            elif status_code == 42 or status_code == 41:
                 return AxisState.DISABLED
-            elif 43 <= status_code <= 48: # Movendo, homing, ou executando algo (algumas placas XPS retornam 44 como homing in progress/moving)
-                # O XPS tem um estado MOVING em 44. Ajuste fino de subestados numéricos pode variar, mas 44 e afins:
+            elif 43 <= status_code <= 48:
+                # 43 = Homing, 44 = Moving, 45 = Trajectory, 46 = Jogging
                 return AxisState.MOVING
             else:
                 # Tratar emergências (50-59) ou falhas

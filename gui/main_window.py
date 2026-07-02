@@ -14,133 +14,8 @@ from core.base import NewportControllerInterface, AxisState
 logger = logging.getLogger(__name__)
 
 # --- Clean Light HMI Theme ---
-LIGHT_HMI_QSS = """
-QMainWindow {
-    background-color: #f5f6f8;
-}
-
-QWidget {
-    font-family: 'Segoe UI', -apple-system, Roboto, Arial, sans-serif;
-    color: #2c3e50;
-    font-size: 10pt;
-}
-
-/* Group Boxes / Frames */
-QGroupBox {
-    border: 1px solid #dcdde1;
-    border-radius: 6px;
-    margin-top: 1.2em;
-    padding-top: 0.8em;
-    background-color: #ffffff;
-}
-QGroupBox::title {
-    subcontrol-origin: margin;
-    subcontrol-position: top left;
-    padding: 0 5px;
-    color: #2980b9;
-    font-weight: bold;
-    font-size: 11pt;
-}
-
-/* Inputs */
-QLineEdit, QComboBox {
-    background-color: #ffffff;
-    border: 1px solid #bdc3c7;
-    border-radius: 4px;
-    padding: 5px 8px;
-    color: #2c3e50;
-}
-QLineEdit:focus, QComboBox:focus {
-    border: 1px solid #3498db;
-}
-
-/* Buttons */
-QPushButton {
-    background-color: #ecf0f1;
-    border: 1px solid #bdc3c7;
-    border-radius: 4px;
-    padding: 8px 16px;
-    color: #2c3e50;
-    font-weight: bold;
-}
-QPushButton:hover {
-    background-color: #d1d8e0;
-}
-QPushButton:pressed {
-    background-color: #bdc3c7;
-}
-QPushButton:disabled {
-    background-color: #f1f2f6;
-    color: #a4b0be;
-    border: 1px solid #dfe4ea;
-}
-
-/* Specific Buttons */
-QPushButton#ConnectBtn {
-    background-color: #27ae60;
-    color: white;
-    border: none;
-}
-QPushButton#ConnectBtn:hover {
-    background-color: #2ecc71;
-}
-QPushButton#DisconnectBtn {
-    background-color: #c0392b;
-    color: white;
-    border: none;
-}
-QPushButton#DisconnectBtn:hover {
-    background-color: #e74c3c;
-}
-QPushButton#ActionBtn {
-    background-color: #3498db;
-    color: white;
-    border: none;
-}
-QPushButton#ActionBtn:hover {
-    background-color: #2980b9;
-}
-QPushButton#HomeBtn {
-    background-color: #f39c12;
-    color: white;
-    border: none;
-    font-size: 11pt;
-}
-QPushButton#HomeBtn:hover {
-    background-color: #e67e22;
-}
-QPushButton#StopBtn {
-    background-color: #e74c3c;
-    color: white;
-    border: none;
-    font-size: 11pt;
-}
-QPushButton#StopBtn:hover {
-    background-color: #c0392b;
-}
-
-/* Position Display */
-QLabel#PositionDisplay {
-    font-family: 'Consolas', 'Courier New', monospace;
-    font-size: 64px;
-    font-weight: normal;
-    color: #2c3e50;
-    background-color: #ecf0f1;
-    border: 2px inset #bdc3c7;
-    border-radius: 8px;
-    padding: 10px;
-}
-
-/* Status Labels */
-QLabel#StatusPill {
-    font-weight: bold;
-    padding: 6px 12px;
-    border-radius: 12px;
-    color: white;
-    background-color: #95a5a6;
-    font-size: 11pt;
-}
-"""
+# Removido a pedido do usuário
+LIGHT_HMI_QSS = ""
 
 class HomingWorker(QThread):
     finished = pyqtSignal()
@@ -164,7 +39,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Newport Motion Control - HMI")
         self.setMinimumSize(900, 700)
-        self.setStyleSheet(LIGHT_HMI_QSS)
         
         self.controller: NewportControllerInterface = None
         self.homing_worker = None
@@ -481,6 +355,9 @@ class MainWindow(QMainWindow):
         self.widget_xps_assistant.hide()
 
     def update_position(self):
+        if self.homing_worker and self.homing_worker.isRunning():
+            return
+            
         if not self.controller: return
         axis = self.cb_axis.currentText()
         if not axis: return
