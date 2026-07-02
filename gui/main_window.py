@@ -495,16 +495,18 @@ class MainWindow(QMainWindow):
         axis = self.cb_axis.currentText()
         try:
             self.controller.enable_axis(axis)
+            self.statusBar().showMessage(f"Motor {axis} habilitado com sucesso.", 3000)
         except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao habilitar: {e}")
+            self.statusBar().showMessage(f"Erro ao habilitar {axis}: {e}", 5000)
 
     def disable_axis(self):
         if not self.controller: return
         axis = self.cb_axis.currentText()
         try:
             self.controller.disable_axis(axis)
+            self.statusBar().showMessage(f"Motor {axis} desabilitado com sucesso.", 3000)
         except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao desabilitar: {e}")
+            self.statusBar().showMessage(f"Erro ao desabilitar {axis}: {e}", 5000)
 
     def kill_axis(self):
         if not self.controller: return

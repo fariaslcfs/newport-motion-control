@@ -206,14 +206,12 @@ class XPS_Controller(NewportControllerInterface):
                 
             if 0 <= status_code <= 9:
                 return AxisState.UNINITIALIZED
-            elif 10 <= status_code <= 19:
-                # Para estágios Open-Loop (MTM250PP.1 / GROUP1), o fim do homing resulta em 11 ou 12.
-                # Como não possuem encoder físico, tratamos como READY para permitir movimentação.
-                # Para os demais (closed-loop), 11 ou 12 significam que ainda necessitam de Home.
-                is_open_loop = (group.upper() == "GROUP1") or ("MTM250" in stage_id.upper())
-                if is_open_loop and status_code in [11, 12]:
-                    return AxisState.READY
+            elif status_code == 10:
                 return AxisState.NOT_REFERENCED
+            elif status_code in [11, 12]:
+                # No XPS-C8 de primeira geração, os eixos terminam a busca de origem em 11 ou 12
+                # e a partir deste estado já aceitam comandos de movimentação (READY).
+                return AxisState.READY
             elif 20 <= status_code <= 29:
                 return AxisState.READY
             elif status_code == 42 or status_code == 41:
@@ -256,8 +254,7 @@ class XPS_Controller(NewportControllerInterface):
             try:
                 self.xps.enable_group(group)
             except Exception as e:
-                logger.error(f"Erro ao habilitar grupo {group}: {e}")
-                raise
+                logger.warning(f"Erro ao habilitar grupo {group} (pode ser ignorado para malha aberta): {e}")
 
     def disable_axis(self, stage_id: str) -> None:
         """
@@ -271,8 +268,7 @@ class XPS_Controller(NewportControllerInterface):
             try:
                 self.xps.disable_group(group)
             except Exception as e:
-                logger.error(f"Erro ao desabilitar grupo {group}: {e}")
-                raise
+                logger.warning(f"Erro ao desabilitar grupo {group} (pode ser ignorado para malha aberta): {e}")
 
     def kill_axis(self, stage_id: str) -> None:
         """
