@@ -1,6 +1,6 @@
 import logging
 from typing import List
-from .base import NewportControllerInterface
+from .base import NewportControllerInterface, AxisState
 
 try:
     from newportxps import NewportXPS
@@ -147,51 +147,72 @@ class XPS_Controller(NewportControllerInterface):
     def home_axis(self, stage_id: str) -> None:
         """
         Inicia a busca de origem (homing) para o grupo correspondente ao estágio.
-
-        Args:
-            stage_id (str): Identificador do estágio.
+        Verifica o estado da máquina e executa as pré-condições necessárias (Kill, Init).
         """
-        if self.xps:
+        if self.xps and hasattr(self.xps, '_xps'):
             group = stage_id.split('.')[0] if '.' in stage_id else stage_id
+            
+            # Consultar status numérico
+            err, status_code = self.xps._xps.GroupStatusGet(self.xps._sid, group)
+            if err != 0:
+                raise RuntimeError(f"Não foi possível obter o estado do grupo para Homing (Err: {err})")
+                
+            # Inteligência de Estados
+            # 0 a 9 = Not Initialized
+            if 0 <= status_code <= 9:
+                logger.info(f"Grupo {group} não inicializado. Inicializando primeiro...")
+                self.xps.initialize_group(group)
+            # 20 a 29 = Ready, 40 a 49 = Disabled. (Precisam voltar para Not Referenced)
+            elif (20 <= status_code <= 29) or (40 <= status_code <= 49):
+                logger.info(f"Grupo {group} já estava Pronto/Desativado. Aplicando Kill -> Init para forçar re-homing...")
+                self.xps.kill_group(group)
+                self.xps.initialize_group(group)
+                
+            # Agora tenta o homing normal
             try:
                 self.xps.home_group(group)
             except Exception as e:
-                logger.warning(f"GroupHomeSearch falhou para {group} ({e}). Tentando fallback...")
-                if hasattr(self.xps, '_xps'):
-                    try:
-                        self.xps.kill_group(group)
-                        self.xps.initialize_group(group)
-                    except Exception as k_e:
-                        logger.debug(f"Kill/Init fallback error: {k_e}")
-                        
-                    try:
-                        err, _ = self.xps._xps.GroupHomeSearchAndRelativeMove(self.xps._sid, group, 0.0)
-                        if err != 0:
-                            raise RuntimeError(f"Falha no fallback de homing. XPS ErrorCode: {err}")
-                    except Exception as fallback_e:
-                        raise RuntimeError(f"Falha nas duas tentativas de homing. Erro: {fallback_e}")
-                else:
-                    raise
+                logger.warning(f"GroupHomeSearch padrão falhou para {group} ({e}). Tentando fallback para Steppers...")
+                try:
+                    err, _ = self.xps._xps.GroupHomeSearchAndRelativeMove(self.xps._sid, group, 0.0)
+                    if err != 0:
+                        raise RuntimeError(f"Falha no fallback de homing. XPS ErrorCode: {err}")
+                except Exception as fallback_e:
+                    raise RuntimeError(f"Falha absoluta na rotina de homing: {fallback_e}")
 
-    def get_axis_status(self, stage_id: str) -> str:
+    def get_axis_status(self, stage_id: str) -> AxisState:
         """
-        Lê o estado da máquina de estados do grupo a que pertence o estágio.
-
-        Args:
-            stage_id (str): Identificador do estágio.
-
-        Returns:
-            str: Nome do estado retornado (ex: 'Ready state', 'Not initialized state').
+        Lê o estado da máquina de estados do grupo a que pertence o estágio
+        e mapeia rigorosamente para o AxisState padronizado.
         """
-        if not self.xps:
-            return "Disconnected"
+        if not self.xps or not hasattr(self.xps, '_xps'):
+            return AxisState.UNKNOWN
+            
         try:
             group = stage_id.split('.')[0] if '.' in stage_id else stage_id
-            statuses = self.xps.get_group_status()
-            return statuses.get(group, "Unknown")
+            err, status_code = self.xps._xps.GroupStatusGet(self.xps._sid, group)
+            
+            if err != 0:
+                return AxisState.ERROR
+                
+            if 0 <= status_code <= 9:
+                return AxisState.UNINITIALIZED
+            elif 10 <= status_code <= 19:
+                return AxisState.NOT_REFERENCED
+            elif 20 <= status_code <= 29:
+                return AxisState.READY
+            elif 40 <= status_code <= 49:
+                return AxisState.DISABLED
+            elif 43 <= status_code <= 48: # Movendo, homing, ou executando algo (algumas placas XPS retornam 44 como homing in progress/moving)
+                # O XPS tem um estado MOVING em 44. Ajuste fino de subestados numéricos pode variar, mas 44 e afins:
+                return AxisState.MOVING
+            else:
+                # Tratar emergências (50-59) ou falhas
+                return AxisState.ERROR
+
         except Exception as e:
-            logger.debug(f"Falha ao ler status do grupo {stage_id}: {e}")
-            return "Unknown"
+            logger.debug(f"Falha ao ler status numérico do grupo {stage_id}: {e}")
+            return AxisState.UNKNOWN
 
     def initialize_axis(self, stage_id: str) -> None:
         """

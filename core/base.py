@@ -1,6 +1,16 @@
 # core/base.py
 import abc
 from typing import List, Dict, Any
+from enum import Enum
+
+class AxisState(Enum):
+    UNINITIALIZED = "UNINITIALIZED"
+    NOT_REFERENCED = "NOT_REFERENCED"
+    DISABLED = "DISABLED"
+    READY = "READY"
+    MOVING = "MOVING"
+    ERROR = "ERROR"
+    UNKNOWN = "UNKNOWN"
 
 class NewportControllerInterface(abc.ABC):
     """
@@ -60,8 +70,8 @@ class NewportControllerInterface(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_axis_status(self, stage_id: str) -> str:
-        """Retorna o estado atual do eixo/grupo (ex: 'Ready', 'Not initialized', 'Disabled')."""
+    def get_axis_status(self, stage_id: str) -> AxisState:
+        """Retorna o estado atual do eixo/grupo como um AxisState."""
         pass
 
     @abc.abstractmethod

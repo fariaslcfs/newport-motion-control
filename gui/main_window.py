@@ -2,104 +2,131 @@ import logging
 import serial.tools.list_ports
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QComboBox, QLineEdit, QPushButton, QMessageBox,
-                             QGroupBox, QGridLayout, QFrame, QSizePolicy)
+                             QGroupBox, QGridLayout, QFrame, QSizePolicy, QTabWidget)
 from PyQt6.QtCore import QTimer, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
 
 from core.esp_controller import ESP300_301_Controller
 from core.esp302_controller import ESP302_Controller
 from core.xps_controller import XPS_Controller
-from core.base import NewportControllerInterface
+from core.base import NewportControllerInterface, AxisState
 
 logger = logging.getLogger(__name__)
 
-# --- Modern Professional Dark Theme ---
-MODERN_THEME_QSS = """
+# --- Clean Light HMI Theme ---
+LIGHT_HMI_QSS = """
 QMainWindow {
-    background-color: #1e1e1e;
+    background-color: #f5f6f8;
 }
 
 QWidget {
-    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
-    color: #cccccc;
+    font-family: 'Segoe UI', -apple-system, Roboto, Arial, sans-serif;
+    color: #2c3e50;
     font-size: 10pt;
 }
 
 /* Group Boxes / Frames */
 QGroupBox {
-    border: 1px solid #333333;
+    border: 1px solid #dcdde1;
     border-radius: 6px;
-    margin-top: 1.5em;
-    padding-top: 0.5em;
-    background-color: #252526;
+    margin-top: 1.2em;
+    padding-top: 0.8em;
+    background-color: #ffffff;
 }
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    padding: 0 10px;
-    color: #4facfe;
+    padding: 0 5px;
+    color: #2980b9;
     font-weight: bold;
     font-size: 11pt;
 }
 
 /* Inputs */
 QLineEdit, QComboBox {
-    background-color: #3c3c3c;
-    border: 1px solid #555555;
+    background-color: #ffffff;
+    border: 1px solid #bdc3c7;
     border-radius: 4px;
     padding: 5px 8px;
-    color: #ffffff;
-    selection-background-color: #007acc;
+    color: #2c3e50;
 }
 QLineEdit:focus, QComboBox:focus {
-    border: 1px solid #007acc;
-}
-QComboBox::drop-down {
-    border: none;
+    border: 1px solid #3498db;
 }
 
 /* Buttons */
 QPushButton {
-    background-color: #007acc;
-    border: none;
+    background-color: #ecf0f1;
+    border: 1px solid #bdc3c7;
     border-radius: 4px;
-    padding: 6px 16px;
-    color: #ffffff;
-    font-weight: 500;
+    padding: 8px 16px;
+    color: #2c3e50;
+    font-weight: bold;
 }
 QPushButton:hover {
-    background-color: #0098ff;
+    background-color: #d1d8e0;
 }
 QPushButton:pressed {
-    background-color: #005a9e;
+    background-color: #bdc3c7;
 }
 QPushButton:disabled {
-    background-color: #4d4d4d;
-    color: #888888;
+    background-color: #f1f2f6;
+    color: #a4b0be;
+    border: 1px solid #dfe4ea;
 }
 
 /* Specific Buttons */
 QPushButton#ConnectBtn {
-    background-color: #28a745;
+    background-color: #27ae60;
+    color: white;
+    border: none;
 }
 QPushButton#ConnectBtn:hover {
-    background-color: #34ce57;
+    background-color: #2ecc71;
 }
 QPushButton#DisconnectBtn {
-    background-color: #dc3545;
+    background-color: #c0392b;
+    color: white;
+    border: none;
 }
 QPushButton#DisconnectBtn:hover {
-    background-color: #fa4a5b;
+    background-color: #e74c3c;
+}
+QPushButton#ActionBtn {
+    background-color: #3498db;
+    color: white;
+    border: none;
+}
+QPushButton#ActionBtn:hover {
+    background-color: #2980b9;
+}
+QPushButton#HomeBtn {
+    background-color: #f39c12;
+    color: white;
+    border: none;
+    font-size: 11pt;
+}
+QPushButton#HomeBtn:hover {
+    background-color: #e67e22;
+}
+QPushButton#StopBtn {
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    font-size: 11pt;
+}
+QPushButton#StopBtn:hover {
+    background-color: #c0392b;
 }
 
 /* Position Display */
 QLabel#PositionDisplay {
     font-family: 'Consolas', 'Courier New', monospace;
-    font-size: 56px;
-    font-weight: 300;
-    color: #4facfe;
-    background-color: #1a1a1a;
-    border: 1px solid #333;
+    font-size: 64px;
+    font-weight: normal;
+    color: #2c3e50;
+    background-color: #ecf0f1;
+    border: 2px inset #bdc3c7;
     border-radius: 8px;
     padding: 10px;
 }
@@ -107,15 +134,11 @@ QLabel#PositionDisplay {
 /* Status Labels */
 QLabel#StatusPill {
     font-weight: bold;
-    padding: 4px 10px;
+    padding: 6px 12px;
     border-radius: 12px;
     color: white;
-    background-color: #6c757d;
-}
-
-/* Separation Lines */
-QFrame#HLine {
-    background-color: #333333;
+    background-color: #95a5a6;
+    font-size: 11pt;
 }
 """
 
@@ -139,12 +162,13 @@ class HomingWorker(QThread):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Newport Motion Control")
-        self.setMinimumSize(850, 650)
-        self.setStyleSheet(MODERN_THEME_QSS)
+        self.setWindowTitle("Newport Motion Control - HMI")
+        self.setMinimumSize(900, 700)
+        self.setStyleSheet(LIGHT_HMI_QSS)
         
         self.controller: NewportControllerInterface = None
         self.homing_worker = None
+        self.current_state = AxisState.UNKNOWN
         
         self.init_ui()
         
@@ -158,33 +182,36 @@ class MainWindow(QMainWindow):
         
         # Main Layout
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(15)
+        main_layout.setContentsMargins(15, 15, 15, 15)
+        main_layout.setSpacing(10)
         
         # 1. Connection Header
         self.create_connection_panel(main_layout)
         
-        # Separator
-        line = QFrame()
-        line.setObjectName("HLine")
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setFixedHeight(1)
-        main_layout.addWidget(line)
+        # 2. Main Body Tabs
+        self.tabs = QTabWidget()
         
-        # 2. Main Body (Axis Control & Display)
-        body_layout = QHBoxLayout()
-        body_layout.setSpacing(20)
+        # Tab 1: Controle Principal
+        tab_control = QWidget()
+        control_layout = QHBoxLayout(tab_control)
+        control_layout.setContentsMargins(10, 10, 10, 10)
+        control_layout.setSpacing(20)
         
-        self.create_control_panel(body_layout)
-        self.create_display_panel(body_layout)
+        self.create_control_panel(control_layout)
+        self.create_display_panel(control_layout)
+        self.tabs.addTab(tab_control, "Controle de Eixo Principal")
         
-        main_layout.addLayout(body_layout)
+        # Tab 2: Terminal RAW (Escondido em uma aba para não poluir)
+        tab_terminal = QWidget()
+        terminal_layout = QVBoxLayout(tab_terminal)
+        self.create_terminal_panel(terminal_layout)
+        self.tabs.addTab(tab_terminal, "Terminal e Comandos (Avançado)")
         
-        # 3. Terminal Footer
-        self.create_terminal_panel(main_layout)
+        main_layout.addWidget(self.tabs)
 
     def create_connection_panel(self, parent_layout):
-        header_layout = QHBoxLayout()
+        self.group_connection = QGroupBox("Hardware e Conexão")
+        header_layout = QHBoxLayout(self.group_connection)
         
         header_layout.addWidget(QLabel("Controlador:"))
         self.cb_controller_type = QComboBox()
@@ -208,119 +235,140 @@ class MainWindow(QMainWindow):
         
         self.btn_connect = QPushButton("Conectar")
         self.btn_connect.setObjectName("ConnectBtn")
-        self.btn_connect.setMinimumWidth(100)
+        self.btn_connect.setMinimumWidth(120)
         self.btn_connect.clicked.connect(self.connect_controller)
         
         self.btn_disconnect = QPushButton("Desconectar")
         self.btn_disconnect.setObjectName("DisconnectBtn")
-        self.btn_disconnect.setMinimumWidth(100)
+        self.btn_disconnect.setMinimumWidth(120)
         self.btn_disconnect.clicked.connect(self.disconnect_controller)
         self.btn_disconnect.setEnabled(False)
         
         header_layout.addWidget(self.btn_connect)
         header_layout.addWidget(self.btn_disconnect)
         
-        parent_layout.addLayout(header_layout)
+        parent_layout.addWidget(self.group_connection)
 
     def create_control_panel(self, parent_layout):
-        self.group_controls = QGroupBox("Controle de Eixo")
-        layout = QVBoxLayout(self.group_controls)
-        layout.setSpacing(15)
+        self.panel_left = QWidget()
+        layout = QVBoxLayout(self.panel_left)
+        layout.setContentsMargins(0, 0, 0, 0)
         
         # Seleção de Eixo
-        axis_layout = QHBoxLayout()
-        axis_layout.addWidget(QLabel("Eixo Selecionado:"))
+        self.group_axis = QGroupBox("Seleção de Eixo")
+        axis_layout = QHBoxLayout(self.group_axis)
+        axis_layout.addWidget(QLabel("Eixo Ativo:"))
         self.cb_axis = QComboBox()
-        self.cb_axis.setMinimumWidth(120)
+        self.cb_axis.setMinimumWidth(150)
         axis_layout.addWidget(self.cb_axis)
-        axis_layout.addStretch()
-        layout.addLayout(axis_layout)
+        layout.addWidget(self.group_axis)
         
         # Ações do Ciclo de Vida
-        actions_grid = QGridLayout()
+        self.group_lifecycle = QGroupBox("Ações de Estado (State Machine)")
+        actions_grid = QGridLayout(self.group_lifecycle)
         actions_grid.setSpacing(10)
         
-        self.btn_initialize = QPushButton("Inicializar")
+        self.btn_initialize = QPushButton("Initialize")
+        self.btn_initialize.setObjectName("ActionBtn")
         self.btn_initialize.clicked.connect(self.initialize_axis)
-        self.btn_kill = QPushButton("Reset / Kill")
-        self.btn_kill.clicked.connect(self.kill_axis)
+        
         self.btn_enable = QPushButton("Enable Motor")
+        self.btn_enable.setObjectName("ActionBtn")
         self.btn_enable.clicked.connect(self.enable_axis)
+        
         self.btn_disable = QPushButton("Disable Motor")
         self.btn_disable.clicked.connect(self.disable_axis)
+        
+        self.btn_kill = QPushButton("Kill / Reset")
+        self.btn_kill.clicked.connect(self.kill_axis)
         
         actions_grid.addWidget(self.btn_initialize, 0, 0)
         actions_grid.addWidget(self.btn_kill, 0, 1)
         actions_grid.addWidget(self.btn_enable, 1, 0)
         actions_grid.addWidget(self.btn_disable, 1, 1)
-        
-        layout.addLayout(actions_grid)
+        layout.addWidget(self.group_lifecycle)
         
         # Ações de Movimento
-        move_layout = QHBoxLayout()
+        self.group_movement = QGroupBox("Movimentação Manual")
+        move_layout = QVBoxLayout(self.group_movement)
+        
+        input_layout = QHBoxLayout()
+        input_layout.addWidget(QLabel("Target Absoluto:"))
         self.le_position = QLineEdit()
-        self.le_position.setPlaceholderText("Destino Absoluto")
-        self.btn_move = QPushButton("Mover")
+        self.le_position.setPlaceholderText("0.00")
+        input_layout.addWidget(self.le_position)
+        move_layout.addLayout(input_layout)
+        
+        self.btn_move = QPushButton("Executar Movimento")
+        self.btn_move.setObjectName("ActionBtn")
         self.btn_move.clicked.connect(self.move_absolute)
-        move_layout.addWidget(self.le_position)
         move_layout.addWidget(self.btn_move)
-        layout.addLayout(move_layout)
-        
-        # Ações Críticas
-        critical_layout = QHBoxLayout()
-        self.btn_home = QPushButton("Home Search")
-        self.btn_home.setStyleSheet("background-color: #fd7e14;") # Laranja
-        self.btn_home.clicked.connect(self.home_axis)
-        
-        self.btn_stop = QPushButton("Parada Emergência")
-        self.btn_stop.setStyleSheet("background-color: #dc3545;") # Vermelho
-        self.btn_stop.clicked.connect(self.stop_motion)
-        
-        critical_layout.addWidget(self.btn_home)
-        critical_layout.addWidget(self.btn_stop)
-        layout.addLayout(critical_layout)
+        layout.addWidget(self.group_movement)
         
         layout.addStretch()
-        self.group_controls.setEnabled(False)
-        parent_layout.addWidget(self.group_controls, stretch=1)
+        self.panel_left.setEnabled(False)
+        parent_layout.addWidget(self.panel_left, stretch=1)
 
     def create_display_panel(self, parent_layout):
-        self.group_display = QGroupBox("Status do Sistema")
-        layout = QVBoxLayout(self.group_display)
+        self.panel_right = QWidget()
+        layout = QVBoxLayout(self.panel_right)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.group_display = QGroupBox("Monitor de Eixo (Dashboard)")
+        display_layout = QVBoxLayout(self.group_display)
         
         # Pill de Status
         status_header = QHBoxLayout()
-        status_header.addWidget(QLabel("Estado da Máquina:"))
+        status_header.addWidget(QLabel("Estado Reportado:"))
         self.lbl_axis_status = QLabel("DESCONECTADO")
         self.lbl_axis_status.setObjectName("StatusPill")
         self.lbl_axis_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         status_header.addWidget(self.lbl_axis_status)
         status_header.addStretch()
-        layout.addLayout(status_header)
+        display_layout.addLayout(status_header)
         
-        layout.addSpacing(20)
+        display_layout.addSpacing(15)
         
         # Display de Posição
-        layout.addWidget(QLabel("Posição Atual (Absoluta):"))
+        display_layout.addWidget(QLabel("Posição Atual (Units):"))
         self.lbl_position_display = QLabel("0.0000")
         self.lbl_position_display.setObjectName("PositionDisplay")
-        self.lbl_position_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
-        # Expande para ocupar o espaço
+        self.lbl_position_display.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.lbl_position_display.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        layout.addWidget(self.lbl_position_display)
+        display_layout.addWidget(self.lbl_position_display)
         
-        parent_layout.addWidget(self.group_display, stretch=2)
+        display_layout.addSpacing(20)
+        
+        # Ações Críticas (Superiores em Destaque)
+        critical_layout = QHBoxLayout()
+        self.btn_home = QPushButton("EXECUTAR HOMING")
+        self.btn_home.setObjectName("HomeBtn")
+        self.btn_home.setMinimumHeight(50)
+        self.btn_home.clicked.connect(self.home_axis)
+        
+        self.btn_stop = QPushButton("PARADA EMERGÊNCIA")
+        self.btn_stop.setObjectName("StopBtn")
+        self.btn_stop.setMinimumHeight(50)
+        self.btn_stop.clicked.connect(self.stop_motion)
+        
+        critical_layout.addWidget(self.btn_home)
+        critical_layout.addWidget(self.btn_stop)
+        display_layout.addLayout(critical_layout)
+        
+        layout.addWidget(self.group_display)
+        
+        self.panel_right.setEnabled(False)
+        parent_layout.addWidget(self.panel_right, stretch=2)
 
     def create_terminal_panel(self, parent_layout):
-        self.group_terminal = QGroupBox("Terminal de Comandos")
+        self.group_terminal = QGroupBox("Console")
         layout = QVBoxLayout(self.group_terminal)
         
         # Assistant (Apenas XPS)
         self.widget_xps_assistant = QWidget()
         xps_layout = QHBoxLayout(self.widget_xps_assistant)
         xps_layout.setContentsMargins(0, 0, 0, 0)
-        xps_layout.addWidget(QLabel("XPS Assistant:"))
+        xps_layout.addWidget(QLabel("Dicionário XPS:"))
         self.cb_xps_commands = QComboBox()
         self.cb_xps_commands.addItem("Selecione um comando da API XPS...")
         self.cb_xps_commands.currentIndexChanged.connect(self.on_xps_command_selected)
@@ -333,7 +381,7 @@ class MainWindow(QMainWindow):
         self.le_custom_cmd = QLineEdit()
         self.le_custom_cmd.setPlaceholderText("Digite um comando raw (ex: 1TP?)")
         
-        self.btn_send_cmd = QPushButton("Enviar Comando")
+        self.btn_send_cmd = QPushButton("Enviar")
         self.btn_send_cmd.clicked.connect(self.send_custom_command)
         
         io_layout.addWidget(self.le_custom_cmd, stretch=2)
@@ -391,7 +439,8 @@ class MainWindow(QMainWindow):
             self.le_address.setEnabled(False)
             self.btn_auto_detect.setEnabled(False)
             
-            self.group_controls.setEnabled(True)
+            self.panel_left.setEnabled(True)
+            self.panel_right.setEnabled(True)
             self.group_terminal.setEnabled(True)
             
             stages = self.controller.get_stage_list()
@@ -421,12 +470,13 @@ class MainWindow(QMainWindow):
         self.le_address.setEnabled(True)
         self.btn_auto_detect.setEnabled(True)
         
-        self.group_controls.setEnabled(False)
+        self.panel_left.setEnabled(False)
+        self.panel_right.setEnabled(False)
         self.group_terminal.setEnabled(False)
         self.cb_axis.clear()
         
         self.lbl_position_display.setText("0.0000")
-        self.update_status_pill("DESCONECTADO", "#6c757d") # Cinza
+        self.update_status_pill("DESCONECTADO", "#95a5a6") # Cinza
         
         self.widget_xps_assistant.hide()
 
@@ -442,8 +492,10 @@ class MainWindow(QMainWindow):
             pass
 
         try:
-            status = self.controller.get_axis_status(axis)
-            self.update_ui_states(status)
+            state = self.controller.get_axis_status(axis)
+            if state != self.current_state:
+                self.current_state = state
+                self.update_ui_states(state)
         except Exception:
             pass
 
@@ -451,68 +503,56 @@ class MainWindow(QMainWindow):
         self.lbl_axis_status.setText(text)
         self.lbl_axis_status.setStyleSheet(f"background-color: {color}; color: white;")
 
-    def update_ui_states(self, status: str):
+    def update_ui_states(self, state: AxisState):
         if self.homing_worker and self.homing_worker.isRunning():
             return
             
-        status_lower = status.lower()
+        # Desabilita tudo e habilita apenas o que faz sentido pro estado da Máquina
+        self.btn_initialize.setEnabled(False)
+        self.btn_enable.setEnabled(False)
+        self.btn_disable.setEnabled(False)
+        self.btn_home.setEnabled(False)
+        self.btn_move.setEnabled(False)
+        self.le_position.setEnabled(False)
+        self.btn_kill.setEnabled(True) # Kill deve ser universal
         
-        # Mapeamento semântico de cores
-        if "not initialized" in status_lower or "notinit" in status_lower:
-            self.update_status_pill(status.upper(), "#dc3545") # Red
+        if state == AxisState.UNINITIALIZED:
+            self.update_status_pill("NÃO INICIALIZADO", "#e74c3c") # Red
             self.btn_initialize.setEnabled(True)
-            self.btn_enable.setEnabled(False)
-            self.btn_disable.setEnabled(False)
-            self.btn_home.setEnabled(False)
-            self.btn_move.setEnabled(False)
-            self.le_position.setEnabled(False)
-            self.btn_kill.setEnabled(True)
+            self.btn_home.setEnabled(True) # O XPS Controller agora faz init automático no home
             
-        elif "not referenced" in status_lower or "notref" in status_lower or "homing" in status_lower:
-            self.update_status_pill(status.upper(), "#fd7e14") # Orange
-            self.btn_initialize.setEnabled(False)
-            self.btn_enable.setEnabled(False)
-            self.btn_disable.setEnabled(False)
+        elif state == AxisState.NOT_REFERENCED:
+            self.update_status_pill("REQUER HOMING", "#f39c12") # Orange
             self.btn_home.setEnabled(True)
-            self.btn_move.setEnabled(False)
-            self.le_position.setEnabled(False)
-            self.btn_kill.setEnabled(True)
             
-        elif "disable" in status_lower or "motor off" in status_lower:
-            self.update_status_pill(status.upper(), "#6f42c1") # Purple
-            self.btn_initialize.setEnabled(False)
+        elif state == AxisState.DISABLED:
+            self.update_status_pill("MOTOR DESLIGADO", "#8e44ad") # Purple
             self.btn_enable.setEnabled(True)
-            self.btn_disable.setEnabled(False)
-            self.btn_home.setEnabled(False)
-            self.btn_move.setEnabled(False)
-            self.le_position.setEnabled(False)
-            self.btn_kill.setEnabled(True)
+            self.btn_home.setEnabled(True) # O XPS Controller fará Kill -> Init -> Home
             
-        elif "ready" in status_lower or "motor on" in status_lower:
-            self.update_status_pill(status.upper(), "#28a745") # Green
-            self.btn_initialize.setEnabled(False)
-            self.btn_enable.setEnabled(False)
+        elif state == AxisState.READY:
+            self.update_status_pill("PRONTO (READY)", "#27ae60") # Green
             self.btn_disable.setEnabled(True)
             self.btn_home.setEnabled(True)
             self.btn_move.setEnabled(True)
             self.le_position.setEnabled(True)
-            self.btn_kill.setEnabled(True)
+            
+        elif state == AxisState.MOVING:
+            self.update_status_pill("EM MOVIMENTO", "#3498db") # Blue
+            # Nada habilitado além do kill/stop
+            
+        elif state == AxisState.ERROR:
+            self.update_status_pill("FALHA / ERRO", "#c0392b") # Dark Red
+            self.btn_initialize.setEnabled(True)
             
         else:
-            self.update_status_pill(status.upper(), "#343a40") # Dark Gray
-            self.btn_initialize.setEnabled(True)
-            self.btn_enable.setEnabled(False)
-            self.btn_disable.setEnabled(False)
-            self.btn_home.setEnabled(False)
-            self.btn_move.setEnabled(False)
-            self.le_position.setEnabled(False)
-            self.btn_kill.setEnabled(True)
+            self.update_status_pill("DESCONHECIDO", "#7f8c8d") # Gray
 
     def move_absolute(self):
         if not self.controller: return
         axis = self.cb_axis.currentText()
         try:
-            pos = float(self.le_position.text().strip())
+            pos = float(self.le_position.text().strip().replace(',', '.'))
             self.controller.move_absolute(axis, pos)
         except ValueError:
             QMessageBox.warning(self, "Aviso", "Por favor, insira um valor numérico válido para a posição.")
@@ -526,8 +566,10 @@ class MainWindow(QMainWindow):
         self.btn_enable.setEnabled(False)
         self.btn_disable.setEnabled(False)
         self.btn_kill.setEnabled(False)
-        self.update_status_pill("HOMING EM PROGRESSO...", "#ffc107") # Yellow
-        self.lbl_axis_status.setStyleSheet("background-color: #ffc107; color: #212529;")
+        self.btn_move.setEnabled(False)
+        
+        self.update_status_pill("HOMING EM PROGRESSO...", "#f1c40f") # Yellow
+        self.lbl_axis_status.setStyleSheet("background-color: #f1c40f; color: #2c3e50;")
         
         self.homing_worker = HomingWorker(self.controller, axis)
         self.homing_worker.finished.connect(self._on_home_finished)
@@ -535,11 +577,13 @@ class MainWindow(QMainWindow):
         self.homing_worker.start()
 
     def _on_home_finished(self):
-        pass # Status será atualizado automaticamente pelo Timer
+        # Força uma atualização do estado para limpar o HOMING EM PROGRESSO
+        self.current_state = AxisState.UNKNOWN 
         
     def _on_home_error(self, err_msg):
-        QMessageBox.critical(self, "Falha no Homing", f"A controladora retornou um erro durante a busca de home:\n\n{err_msg}")
+        QMessageBox.critical(self, "Falha no Homing", f"A controladora retornou um erro durante a busca de origem:\n\n{err_msg}")
         self.btn_kill.setEnabled(True)
+        self.current_state = AxisState.UNKNOWN 
 
     def stop_motion(self):
         if not self.controller: return

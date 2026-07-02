@@ -1,7 +1,7 @@
 import socket
 import logging
 from typing import List
-from .base import NewportControllerInterface
+from .base import NewportControllerInterface, AxisState
 
 logger = logging.getLogger(__name__)
 
@@ -147,25 +147,20 @@ class ESP302_Controller(NewportControllerInterface):
         # Busca origem (Search for Home)
         self.send_command(f"{stage_id}OR")
 
-    def get_axis_status(self, stage_id: str) -> str:
+    def get_axis_status(self, stage_id: str) -> AxisState:
         """
         Consulta se o motor do eixo está ligado enviando '{stage_id}MO?'.
-
-        Args:
-            stage_id (str): Identificador do eixo.
-
-        Returns:
-            str: 'Ready (Motor ON)', 'Disabled (Motor OFF)' ou status bruto.
+        Mapeia para AxisState.READY ou AxisState.DISABLED.
         """
         if not self.sock:
-            return "Disconnected"
+            return AxisState.UNKNOWN
         ret = self.send_command(f"{stage_id}MO?")
         if ret == "1":
-            return "Ready (Motor ON)"
+            return AxisState.READY
         elif ret == "0":
-            return "Disabled (Motor OFF)"
+            return AxisState.DISABLED
         else:
-            return f"Unknown ({ret})"
+            return AxisState.UNKNOWN
 
     def initialize_axis(self, stage_id: str) -> None:
         """

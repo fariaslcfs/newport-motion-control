@@ -2,7 +2,7 @@ import serial
 import time
 import logging
 from typing import List
-from .base import NewportControllerInterface
+from .base import NewportControllerInterface, AxisState
 
 logger = logging.getLogger(__name__)
 
@@ -138,25 +138,21 @@ class ESP300_301_Controller(NewportControllerInterface):
         except Exception as e:
             logger.error(f"Erro ao executar home no eixo {stage_id}: {e}")
 
-    def get_axis_status(self, stage_id: str) -> str:
+    def get_axis_status(self, stage_id: str) -> AxisState:
         """
         Consulta o estado de energia do motor para o eixo via 'MO?'.
-
-        Args:
-            stage_id (str): Identificador do eixo (ex: '1').
-
-        Returns:
-            str: 'Ready (Motor ON)', 'Disabled (Motor OFF)' ou status bruto.
+        Mapeia para AxisState.READY ou AxisState.DISABLED.
         """
         if not self.serial_port or not self.serial_port.is_open:
-            return "Disconnected"
+            return AxisState.UNKNOWN
+            
         ret = self.send_command(f"{stage_id}MO?")
         if ret == "1":
-            return "Ready (Motor ON)"
+            return AxisState.READY
         elif ret == "0":
-            return "Disabled (Motor OFF)"
+            return AxisState.DISABLED
         else:
-            return f"Unknown ({ret})"
+            return AxisState.UNKNOWN
 
     def initialize_axis(self, stage_id: str) -> None:
         """
