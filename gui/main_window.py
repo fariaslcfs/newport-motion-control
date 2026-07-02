@@ -136,6 +136,7 @@ class MainWindow(QMainWindow):
         axis_layout.addWidget(QLabel("Eixo Ativo:"))
         self.cb_axis = QComboBox()
         self.cb_axis.setMinimumWidth(150)
+        self.cb_axis.currentTextChanged.connect(self.on_axis_changed)
         axis_layout.addWidget(self.cb_axis)
         layout.addWidget(self.group_axis)
         
@@ -278,6 +279,12 @@ class MainWindow(QMainWindow):
     # LÓGICA DE NEGÓCIO E MÉTODOS DE AÇÃO
     # =========================================================================
 
+    def on_axis_changed(self, text):
+        if not text: return
+        self.current_state = AxisState.UNKNOWN
+        self.lbl_position_display.setText("0.0000")
+        self.update_position()
+
     def on_controller_type_changed(self, text):
         if "Serial" in text:
             self.btn_auto_detect.setEnabled(True)
@@ -368,11 +375,12 @@ class MainWindow(QMainWindow):
         # 1. Update State First (Seguro para Open-Loop)
         try:
             state = self.controller.get_axis_status(axis)
+            print(f"DEBUG GUI: Axis={axis}, State={state}")
             if state != self.current_state:
                 self.current_state = state
                 self.update_ui_states(state)
         except Exception:
-            pass
+            logger.exception("Erro ao atualizar estado na interface")
 
         # 2. Update Position (APENAS se não estiver movendo, para não travar Open-Loop)
         if self.current_state != AxisState.MOVING:
@@ -380,7 +388,7 @@ class MainWindow(QMainWindow):
                 pos = self.controller.get_current_position(axis)
                 self.lbl_position_display.setText(f"{pos:.4f}")
             except Exception:
-                pass
+                logger.exception("Erro ao obter posição na interface")
 
     def update_status_pill(self, text, color="#555555"):
         self.lbl_axis_status.setText(text)
@@ -413,12 +421,14 @@ class MainWindow(QMainWindow):
         elif state == AxisState.DISABLED:
             self.update_status_pill("MOTOR DESLIGADO", "#7b1fa2") # Roxo
             self.btn_enable.setEnabled(True)
+            self.btn_home.setEnabled(True) # Permitir fazer Homing se estiver desligado (fará Kill->Init->Home)
             
         elif state == AxisState.READY:
             self.update_status_pill("PRONTO (READY)", "#388e3c") # Verde Acessível
             self.btn_disable.setEnabled(True)
             self.btn_move.setEnabled(True)
             self.le_position.setEnabled(True)
+            self.btn_home.setEnabled(True) # Permitir fazer Homing a qualquer momento se estiver pronto
             
         elif state == AxisState.MOVING:
             self.update_status_pill("EM MOVIMENTO / TAREFA", "#1976d2") # Azul

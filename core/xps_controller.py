@@ -146,12 +146,36 @@ class XPS_Controller(NewportControllerInterface):
 
     def home_axis(self, stage_id: str) -> None:
         """
-        Executa a busca de origem (Homing) estritamente no grupo do estágio.
-        Presume que as pré-condições (Inicializado, Não Referenciado) já foram
-        satisfeitas pela lógica da interface.
+        Executa a busca de origem (Homing) no grupo do estágio.
+        Verifica o estado atual e realiza automaticamente as transições de estado
+        necessárias (como Kill e Initialize com delays adequados) antes de homing.
         """
         if self.xps and hasattr(self.xps, '_xps'):
             group = stage_id.split('.')[0] if '.' in stage_id else stage_id
+            
+            # Consultar status numérico atual
+            err, status_code = self.xps._xps.GroupStatusGet(self.xps._sid, group)
+            if err != 0:
+                raise RuntimeError(f"Não foi possível obter o estado do grupo para Homing (Err: {err})")
+                
+            is_open_loop = (group.upper() == "GROUP1") or ("MTM250" in stage_id.upper())
+            
+            # Determina se o estágio já está pronto/referenciado ou desabilitado
+            # (XPS exige voltar para Not Referenced para poder aceitar comando de Home)
+            needs_reinit = (20 <= status_code <= 29) or (status_code in [41, 42]) or (is_open_loop and status_code in [11, 12])
+            needs_init = (0 <= status_code <= 9)
+            
+            import time
+            if needs_reinit:
+                logger.info(f"Grupo {group} no estado {status_code}. Aplicando Kill -> Init com delays para re-homing...")
+                self.xps.kill_group(group)
+                time.sleep(1.0)
+                self.xps.initialize_group(group)
+                time.sleep(2.0)
+            elif needs_init:
+                logger.info(f"Grupo {group} não inicializado. Inicializando com delay antes de homing...")
+                self.xps.initialize_group(group)
+                time.sleep(2.0)
                 
             try:
                 self.xps.home_group(group)
@@ -175,6 +199,7 @@ class XPS_Controller(NewportControllerInterface):
         try:
             group = stage_id.split('.')[0] if '.' in stage_id else stage_id
             err, status_code = self.xps._xps.GroupStatusGet(self.xps._sid, group)
+            print(f"DEBUG XPS: Axis={stage_id}, Group={group}, StatusCode={status_code}, Err={err}")
             
             if err != 0:
                 return AxisState.ERROR
@@ -201,7 +226,7 @@ class XPS_Controller(NewportControllerInterface):
                 return AxisState.ERROR
 
         except Exception as e:
-            logger.debug(f"Falha ao ler status numérico do grupo {stage_id}: {e}")
+            logger.exception(f"Falha crítica ao ler status numérico do grupo {stage_id}")
             return AxisState.UNKNOWN
 
     def initialize_axis(self, stage_id: str) -> None:
