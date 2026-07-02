@@ -181,8 +181,12 @@ class XPS_Controller(NewportControllerInterface):
                 
             if 0 <= status_code <= 9:
                 return AxisState.UNINITIALIZED
-            elif 10 <= status_code <= 19:
+            elif status_code == 10:
                 return AxisState.NOT_REFERENCED
+            elif status_code in [11, 12]:
+                # Para estágios Open-Loop (MTM250PP.1), o fim do homing resulta em 11
+                # e isso é considerado o "Ready" deles, pois não possuem encoder.
+                return AxisState.READY
             elif 20 <= status_code <= 29:
                 return AxisState.READY
             elif status_code == 42 or status_code == 41:

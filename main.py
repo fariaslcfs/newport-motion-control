@@ -18,8 +18,13 @@ def main():
     
     app = QApplication(sys.argv)
     
-    # Configure style
+    # Ativa o estilo Fusion (flat, acessível e nativo do Qt)
     app.setStyle("Fusion")
+    
+    # Ajusta a fonte global para melhorar a legibilidade e acessibilidade
+    font = app.font()
+    font.setPointSize(11)
+    app.setFont(font)
     
     window = MainWindow()
     window.show()

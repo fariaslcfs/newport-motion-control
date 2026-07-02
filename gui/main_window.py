@@ -14,8 +14,7 @@ from core.base import NewportControllerInterface, AxisState
 logger = logging.getLogger(__name__)
 
 # --- Clean Light HMI Theme ---
-# Removido a pedido do usuário
-LIGHT_HMI_QSS = ""
+# Tema customizado removido a pedido do usuário
 
 class HomingWorker(QThread):
     finished = pyqtSignal()
@@ -39,6 +38,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Newport Motion Control - HMI")
         self.setMinimumSize(900, 700)
+        
+        # A fonte de tamanho grande do display
+        self.display_font = QFont("Consolas", 48)
         
         self.controller: NewportControllerInterface = None
         self.homing_worker = None
@@ -207,6 +209,7 @@ class MainWindow(QMainWindow):
         display_layout.addWidget(QLabel("Posição Atual (Units):"))
         self.lbl_position_display = QLabel("0.0000")
         self.lbl_position_display.setObjectName("PositionDisplay")
+        self.lbl_position_display.setFont(self.display_font)
         self.lbl_position_display.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.lbl_position_display.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         display_layout.addWidget(self.lbl_position_display)
@@ -350,7 +353,7 @@ class MainWindow(QMainWindow):
         self.cb_axis.clear()
         
         self.lbl_position_display.setText("0.0000")
-        self.update_status_pill("DESCONECTADO", "#95a5a6") # Cinza
+        self.update_status_pill("DESCONECTADO")
         
         self.widget_xps_assistant.hide()
 
@@ -362,12 +365,7 @@ class MainWindow(QMainWindow):
         axis = self.cb_axis.currentText()
         if not axis: return
             
-        try:
-            pos = self.controller.get_current_position(axis)
-            self.lbl_position_display.setText(f"{pos:.4f}")
-        except Exception:
-            pass
-
+        # 1. Update State First (Seguro para Open-Loop)
         try:
             state = self.controller.get_axis_status(axis)
             if state != self.current_state:
@@ -376,9 +374,20 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def update_status_pill(self, text, color):
+        # 2. Update Position (APENAS se não estiver movendo, para não travar Open-Loop)
+        if self.current_state != AxisState.MOVING:
+            try:
+                pos = self.controller.get_current_position(axis)
+                self.lbl_position_display.setText(f"{pos:.4f}")
+            except Exception:
+                pass
+
+    def update_status_pill(self, text, color="#555555"):
         self.lbl_axis_status.setText(text)
-        self.lbl_axis_status.setStyleSheet(f"background-color: {color}; color: white;")
+        # Utilizando cores sólidas apenas no marcador de estado para acessibilidade visual
+        self.lbl_axis_status.setStyleSheet(
+            f"background-color: {color}; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold;"
+        )
 
     def update_ui_states(self, state: AxisState):
         if self.homing_worker and self.homing_worker.isRunning():
@@ -394,33 +403,33 @@ class MainWindow(QMainWindow):
         self.btn_kill.setEnabled(True) # Kill deve ser universal
         
         if state == AxisState.UNINITIALIZED:
-            self.update_status_pill("NÃO INICIALIZADO", "#e74c3c") # Red
+            self.update_status_pill("NÃO INICIALIZADO", "#d32f2f") # Vermelho Acessível
             self.btn_initialize.setEnabled(True)
             
         elif state == AxisState.NOT_REFERENCED:
-            self.update_status_pill("NÃO REFERENCIADO (REQUER HOME)", "#f39c12") # Orange
+            self.update_status_pill("NÃO REFERENCIADO (REQUER HOME)", "#f57c00") # Laranja
             self.btn_home.setEnabled(True)
             
         elif state == AxisState.DISABLED:
-            self.update_status_pill("MOTOR DESLIGADO", "#8e44ad") # Purple
+            self.update_status_pill("MOTOR DESLIGADO", "#7b1fa2") # Roxo
             self.btn_enable.setEnabled(True)
             
         elif state == AxisState.READY:
-            self.update_status_pill("PRONTO (READY)", "#27ae60") # Green
+            self.update_status_pill("PRONTO (READY)", "#388e3c") # Verde Acessível
             self.btn_disable.setEnabled(True)
             self.btn_move.setEnabled(True)
             self.le_position.setEnabled(True)
             
         elif state == AxisState.MOVING:
-            self.update_status_pill("EM MOVIMENTO / TAREFA", "#3498db") # Blue
+            self.update_status_pill("EM MOVIMENTO / TAREFA", "#1976d2") # Azul
             # Apenas Kill/Stop liberado
             
         elif state == AxisState.ERROR:
-            self.update_status_pill("FALHA / ERRO", "#c0392b") # Dark Red
+            self.update_status_pill("FALHA / ERRO", "#b71c1c") # Vermelho Escuro
             self.btn_kill.setEnabled(True)
             
         else:
-            self.update_status_pill("DESCONHECIDO", "#7f8c8d") # Gray
+            self.update_status_pill("DESCONHECIDO", "#616161") # Cinza
 
     def move_absolute(self):
         if not self.controller: return
@@ -442,8 +451,7 @@ class MainWindow(QMainWindow):
         self.btn_kill.setEnabled(False)
         self.btn_move.setEnabled(False)
         
-        self.update_status_pill("HOMING EM PROGRESSO...", "#f1c40f") # Yellow
-        self.lbl_axis_status.setStyleSheet("background-color: #f1c40f; color: #2c3e50;")
+        self.update_status_pill("HOMING EM PROGRESSO...")
         
         self.homing_worker = HomingWorker(self.controller, axis)
         self.homing_worker.finished.connect(self._on_home_finished)
