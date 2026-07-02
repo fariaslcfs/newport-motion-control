@@ -181,12 +181,14 @@ class XPS_Controller(NewportControllerInterface):
                 
             if 0 <= status_code <= 9:
                 return AxisState.UNINITIALIZED
-            elif status_code == 10:
+            elif 10 <= status_code <= 19:
+                # Para estágios Open-Loop (MTM250PP.1 / GROUP1), o fim do homing resulta em 11 ou 12.
+                # Como não possuem encoder físico, tratamos como READY para permitir movimentação.
+                # Para os demais (closed-loop), 11 ou 12 significam que ainda necessitam de Home.
+                is_open_loop = (group.upper() == "GROUP1") or ("MTM250" in stage_id.upper())
+                if is_open_loop and status_code in [11, 12]:
+                    return AxisState.READY
                 return AxisState.NOT_REFERENCED
-            elif status_code in [11, 12]:
-                # Para estágios Open-Loop (MTM250PP.1), o fim do homing resulta em 11
-                # e isso é considerado o "Ready" deles, pois não possuem encoder.
-                return AxisState.READY
             elif 20 <= status_code <= 29:
                 return AxisState.READY
             elif status_code == 42 or status_code == 41:
