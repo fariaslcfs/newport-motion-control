@@ -37,10 +37,10 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Newport Motion Control - HMI")
-        self.setMinimumSize(900, 700)
+        self.setMinimumSize(800, 560)
         
         # A fonte de tamanho grande do display
-        self.display_font = QFont("Consolas", 48)
+        self.display_font = QFont("Consolas", 36)
         
         self.controller: NewportControllerInterface = None
         self.homing_worker = None
@@ -58,8 +58,8 @@ class MainWindow(QMainWindow):
         
         # Main Layout
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(8)
         
         # 1. Connection Header
         self.create_connection_panel(main_layout)
@@ -70,8 +70,8 @@ class MainWindow(QMainWindow):
         # Tab 1: Controle Principal
         tab_control = QWidget()
         control_layout = QHBoxLayout(tab_control)
-        control_layout.setContentsMargins(10, 10, 10, 10)
-        control_layout.setSpacing(20)
+        control_layout.setContentsMargins(6, 6, 6, 6)
+        control_layout.setSpacing(12)
         
         self.create_control_panel(control_layout)
         self.create_display_panel(control_layout)
@@ -143,7 +143,7 @@ class MainWindow(QMainWindow):
         # Ações do Ciclo de Vida
         self.group_lifecycle = QGroupBox("Ações de Estado (State Machine)")
         actions_grid = QGridLayout(self.group_lifecycle)
-        actions_grid.setSpacing(10)
+        actions_grid.setSpacing(6)
         
         self.btn_initialize = QPushButton("Initialize")
         self.btn_initialize.setObjectName("ActionBtn")
@@ -221,12 +221,12 @@ class MainWindow(QMainWindow):
         critical_layout = QHBoxLayout()
         self.btn_home = QPushButton("EXECUTAR HOMING")
         self.btn_home.setObjectName("HomeBtn")
-        self.btn_home.setMinimumHeight(50)
+        self.btn_home.setMinimumHeight(40)
         self.btn_home.clicked.connect(self.home_axis)
         
         self.btn_stop = QPushButton("PARADA EMERGÊNCIA")
         self.btn_stop.setObjectName("StopBtn")
-        self.btn_stop.setMinimumHeight(50)
+        self.btn_stop.setMinimumHeight(40)
         self.btn_stop.clicked.connect(self.stop_motion)
         
         critical_layout.addWidget(self.btn_home)
