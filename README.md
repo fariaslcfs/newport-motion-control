@@ -74,7 +74,6 @@ newport-motion-control/
 │   ├── esp302_controller.py    # Lógica Socket do ESP302
 │   └── xps_controller.py       # Lógica Socket do XPS C8
 ├── gui/
-│   ├── __init__.py
 │   └── main_window.py          # Telas, Botões e Eventos do PyQt6
 ├── main.py                     # Entry point da aplicação
 └── README.md
